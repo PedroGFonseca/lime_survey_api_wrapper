@@ -1,0 +1,38 @@
+/* Custom styles for LimeSurvey Analyzer documentation */
+
+/* Add some extra spacing for code blocks */
+.highlight {
+    margin: 1em 0;
+}
+
+/* Make method signatures more readable */
+.sig-name {
+    font-weight: bold;
+}
+
+/* Style for security warnings */
+.admonition.warning {
+    border-left: 4px solid #f0ad4e;
+}
+
+/* Better spacing for parameter lists */
+.field-list {
+    margin-bottom: 1em;
+}
+
+.field-list .field-name {
+    font-weight: bold;
+    color: #555;
+}
+
+/* Style for code examples */
+.highlight-python {
+    border: 1px solid #e1e4e5;
+    border-radius: 3px;
+}
+
+/* Improve readability of return types */
+.sig-return {
+    color: #666;
+    font-style: italic;
+} 
