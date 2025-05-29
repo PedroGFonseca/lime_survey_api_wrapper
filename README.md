@@ -81,6 +81,8 @@ pip install -e ".[dev]"
 
 ## 🚀 Quick Start
 
+**📋 Before running examples**: Make sure you've installed the package first with `pip install -e .` from the project root directory.
+
 ### 1. Using Environment Variables (Recommended)
 
 Set your credentials as environment variables:
@@ -167,6 +169,14 @@ Explore survey structure and question details:
 - `get_group_properties(group_id)` - Get detailed group configuration and settings
 - `list_questions(survey_id)` - Get all questions with types, codes, and basic properties
 - `get_question_properties(question_id)` - Get complete question metadata including validation rules and display logic
+- `list_conditions(survey_id, question_id=None)` - Get legacy condition rules that control question visibility
+- `get_conditions(survey_id, question_id)` - Get detailed condition information for specific questions
+
+**Conditional Questions**: LimeSurvey supports two systems for conditional logic:
+- **Modern**: Relevance equations (found in `get_question_properties()` under 'relevance')
+- **Legacy**: Condition rules (retrieved via `list_conditions()` and `get_conditions()`)
+
+Both systems control when questions are shown to respondents based on previous answers.
 
 ### 📈 Response Manager (`api.responses`)
 

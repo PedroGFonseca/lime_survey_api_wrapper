@@ -208,4 +208,130 @@ class TestRequiresSessionDecorator:
         result = manager.test_method()
         assert result == "success"
         assert manager._client.get_session_called
-        assert manager._client.session_key == "new_session" 
+        assert manager._client.session_key == "new_session"
+
+
+class TestQuestionManagerConditions:
+    """Test cases for Question Manager condition methods."""
+    
+    def test_list_conditions_all_survey(self):
+        """Test listing all conditions in a survey."""
+        from lime_survey_analyzer.managers.question import QuestionManager
+        
+        # Mock client
+        mock_client = MagicMock()
+        mock_client.session_key = "test_session"
+        
+        # Mock API response
+        expected_conditions = [
+            {
+                'qid': '123',
+                'cid': '1',
+                'cfieldname': 'question_1',
+                'method': '==',
+                'value': 'Y'
+            },
+            {
+                'qid': '124', 
+                'cid': '2',
+                'cfieldname': 'question_2',
+                'method': '>',
+                'value': '18'
+            }
+        ]
+        
+        manager = QuestionManager(mock_client)
+        
+        with patch.object(manager, '_make_request') as mock_request:
+            mock_request.return_value = expected_conditions
+            
+            result = manager.list_conditions("987654")
+            
+            # Verify correct API call
+            mock_request.assert_called_once_with("list_conditions", ["test_session", "987654"])
+            assert result == expected_conditions
+            
+    def test_list_conditions_specific_question(self):
+        """Test listing conditions for a specific question."""
+        from lime_survey_analyzer.managers.question import QuestionManager
+        
+        mock_client = MagicMock()
+        mock_client.session_key = "test_session"
+        
+        expected_conditions = [
+            {
+                'qid': '123',
+                'cid': '1', 
+                'cfieldname': 'question_1',
+                'method': '==',
+                'value': 'Y'
+            }
+        ]
+        
+        manager = QuestionManager(mock_client)
+        
+        with patch.object(manager, '_make_request') as mock_request:
+            mock_request.return_value = expected_conditions
+            
+            result = manager.list_conditions("987654", "123")
+            
+            # Verify correct API call with question_id parameter
+            mock_request.assert_called_once_with("list_conditions", ["test_session", "987654", "123"])
+            assert result == expected_conditions
+            
+    def test_get_conditions(self):
+        """Test getting detailed conditions for a specific question."""
+        from lime_survey_analyzer.managers.question import QuestionManager
+        
+        mock_client = MagicMock() 
+        mock_client.session_key = "test_session"
+        
+        expected_conditions = [
+            {
+                'qid': '123',
+                'cid': '1',
+                'cfieldname': 'survey_123_question_1',
+                'method': '==',
+                'value': 'Y',
+                'scenario': '1'
+            },
+            {
+                'qid': '123',
+                'cid': '2', 
+                'cfieldname': 'survey_123_question_2',
+                'method': '>',
+                'value': '18',
+                'scenario': '1'
+            }
+        ]
+        
+        manager = QuestionManager(mock_client)
+        
+        with patch.object(manager, '_make_request') as mock_request:
+            mock_request.return_value = expected_conditions
+            
+            result = manager.get_conditions("987654", "123")
+            
+            # Verify correct API call
+            mock_request.assert_called_once_with("get_conditions", ["test_session", "987654", "123"])
+            assert result == expected_conditions
+            
+    def test_conditions_empty_response(self):
+        """Test condition methods with empty responses."""
+        from lime_survey_analyzer.managers.question import QuestionManager
+        
+        mock_client = MagicMock()
+        mock_client.session_key = "test_session"
+        
+        manager = QuestionManager(mock_client)
+        
+        with patch.object(manager, '_make_request') as mock_request:
+            mock_request.return_value = []
+            
+            # Test list_conditions
+            result = manager.list_conditions("987654")
+            assert result == []
+            
+            # Test get_conditions
+            result = manager.get_conditions("987654", "123")
+            assert result == [] 
