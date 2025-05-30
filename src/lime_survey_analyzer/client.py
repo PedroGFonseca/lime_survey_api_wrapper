@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 import requests
 
+from .session import SessionManager
 from .managers.survey import SurveyManager
 from .managers.question import QuestionManager  
 from .managers.response import ResponseManager
@@ -93,9 +94,7 @@ class LimeSurveyDirectAPI:
         self._password = password  # For backward compatibility with tests
         self.debug = debug
         self.auto_session = auto_session
-        self.session_key = None
         self._request_id = 0
-        self._persistent_session = False
         
         # Validate URL
         if not url.startswith(('http://', 'https://')):
@@ -110,11 +109,24 @@ class LimeSurveyDirectAPI:
                 UserWarning
             )
         
+        # Initialize session manager
+        self._session_manager = SessionManager(url, username, password, debug)
+        
         # Initialize managers
         self.surveys = SurveyManager(self)
         self.questions = QuestionManager(self)
         self.responses = ResponseManager(self)
         self.participants = ParticipantManager(self)
+    
+    @property
+    def session_key(self) -> Optional[str]:
+        """Get current session key from session manager."""
+        return self._session_manager.session_key
+    
+    @property
+    def _persistent_session(self) -> bool:
+        """Check if session is persistent (for backward compatibility)."""
+        return self._session_manager.is_persistent
         
     @classmethod
     def from_env(cls, debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
@@ -235,9 +247,7 @@ class LimeSurveyDirectAPI:
             
             api.disconnect()
         """
-        if not self.session_key:
-            self._get_session_key()
-            self._persistent_session = True
+        self._session_manager.connect_persistent()
         return self
     
     def disconnect(self):
@@ -247,9 +257,7 @@ class LimeSurveyDirectAPI:
         Call this when done with a persistent session to properly
         release the session on the LimeSurvey server.
         """
-        if self._persistent_session:
-            self._release_session_key()
-            self._persistent_session = False
+        self._session_manager.disconnect_persistent()
     
     def is_connected(self) -> bool:
         """
@@ -258,7 +266,7 @@ class LimeSurveyDirectAPI:
         Returns:
             True if connected with an active session key, False otherwise
         """
-        return self.session_key is not None
+        return self._session_manager.is_connected
 
     def _make_request(self, method: str, params: List[Any]) -> Any:
         """
@@ -274,63 +282,39 @@ class LimeSurveyDirectAPI:
         Raises:
             Exception: If the API request fails or returns an error
         """
-        if self.auto_session and not self.session_key:
-            # Auto-session mode: temporarily get session for this request
-            temp_session = True
-            self._get_session_key()
+        if self.auto_session:
+            # Auto-session mode: use temporary session for this request
+            with self._session_manager.temporary_session():
+                final_params = self._session_manager.ensure_session_key(params)
+                return self._execute_request(method, final_params)
         else:
-            temp_session = False
-        
-        try:
-            self._request_id += 1
-            
-            payload = {
-                "method": method,
-                "params": params,
-                "id": self._request_id
-            }
-            
-            if self.debug:
-                # Only log method and param count for security
-                print(f"DEBUG: Making request to {method} with {len(params)} parameters")
-            
-            response = requests.post(
-                self.url,
-                json=payload,
-                headers={'Content-Type': 'application/json'}
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            if 'error' in result and result['error'] is not None:
-                raise Exception(f"API Error: {result['error']}")
-            
-            return result['result']
-            
-        finally:
-            # Clean up temporary session if auto-session mode
-            if temp_session and self.auto_session:
-                self._release_session_key()
+            # Persistent session mode: use existing session
+            final_params = self._session_manager.ensure_session_key(params)
+            return self._execute_request(method, final_params)
     
-    def _get_session_key(self) -> str:
+    def _execute_request(self, method: str, params: List[Any]) -> Any:
         """
-        Authenticate and get session key from LimeSurvey.
+        Execute the actual HTTP request to LimeSurvey API.
         
+        Args:
+            method: API method name
+            params: Complete parameter list with session key
+            
         Returns:
-            Session key string for authenticated requests
+            API response data
         """
-        # Make direct request to avoid recursion with _make_request
         self._request_id += 1
         
         payload = {
-            "method": "get_session_key",
-            "params": [self.username, self.password],
+            "method": method,
+            "params": params,
             "id": self._request_id
         }
         
         if self.debug:
-            print(f"DEBUG: Authenticating with LimeSurvey")
+            print(f"DEBUG: Making request to {method} with {len(params)} parameters")
+            session_key = params[0] if params else None
+            print(f"DEBUG: Session key: {session_key[:10] if session_key else 'None'}...")
         
         response = requests.post(
             self.url,
@@ -344,40 +328,7 @@ class LimeSurveyDirectAPI:
         if 'error' in result and result['error'] is not None:
             raise Exception(f"API Error: {result['error']}")
         
-        session_result = result['result']
-        
-        if isinstance(session_result, dict) and 'status' in session_result:
-            # Error response format
-            raise Exception(f"Authentication failed: {session_result.get('status', 'Unknown error')}")
-        
-        self.session_key = session_result
-        return session_result
-    
-    def _release_session_key(self) -> None:
-        """Release the current session key."""
-        if self.session_key:
-            try:
-                # Make direct request to avoid recursion with _make_request
-                self._request_id += 1
-                
-                payload = {
-                    "method": "release_session_key",
-                    "params": [self.session_key],
-                    "id": self._request_id
-                }
-                
-                response = requests.post(
-                    self.url,
-                    json=payload,
-                    headers={'Content-Type': 'application/json'}
-                )
-                response.raise_for_status()
-                
-            except Exception:
-                # Ignore errors when releasing session - server might have already cleaned up
-                pass
-            finally:
-                self.session_key = None
+        return result['result']
     
     def _build_params(self, base_params: List[Any], **optional_params) -> List[Any]:
         """
@@ -396,4 +347,11 @@ class LimeSurveyDirectAPI:
                 params.append(value)
         return params
     
-    # Session management methods for explicit control when needed 
+    # Legacy methods for backward compatibility
+    def _get_session_key(self) -> str:
+        """Legacy method for backward compatibility."""
+        return self._session_manager.create_session()
+    
+    def _release_session_key(self) -> None:
+        """Legacy method for backward compatibility."""
+        self._session_manager.release_session() 
