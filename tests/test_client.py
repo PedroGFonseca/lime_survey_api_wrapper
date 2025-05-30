@@ -84,7 +84,7 @@ password = testpass
         config_file = tmp_path / "test_config.ini"
         config_file.write_text("[other_section]\nkey = value\n")
         
-        with pytest.raises(ValueError, match="Section 'limesurvey' not found"):
+        with pytest.raises(ValueError, match="Configuration file must contain \\[limesurvey\\] section"):
             LimeSurveyDirectAPI.from_config(config_file)
 
     def test_from_config_missing_keys(self, tmp_path):
@@ -97,7 +97,7 @@ username = testuser
 # password missing
 """)
         
-        with pytest.raises(ValueError, match="Missing required config keys"):
+        with pytest.raises(ValueError, match="Missing required configuration keys"):
             LimeSurveyDirectAPI.from_config(config_file)
 
     @patch('builtins.input')
@@ -120,11 +120,19 @@ username = testuser
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass")
+        # Test with auto_session=False to avoid extra session calls
+        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        api.session_key = "test_session"  # Set session manually for this test
+        
         result = api._make_request("test_method", ["param1", "param2"])
         
         assert result == 'test_result'
-        mock_post.assert_called_once()
+        # Should only make one call when session exists and auto_session=False
+        mock_post.assert_called_once_with(
+            'https://example.com/admin/remotecontrol',
+            json={'method': 'test_method', 'params': ['param1', 'param2'], 'id': 1},
+            headers={'Content-Type': 'application/json'}
+        )
 
     @patch('requests.post')
     def test_make_request_api_error(self, mock_post):
@@ -134,10 +142,37 @@ username = testuser
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass")
+        # Test with auto_session=False to avoid extra session calls
+        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        api.session_key = "test_session"  # Set session manually for this test
         
         with pytest.raises(Exception, match="API Error: API Error Message"):
             api._make_request("test_method", ["param1"])
+
+    @patch('requests.post')
+    def test_make_request_auto_session(self, mock_post):
+        """Test API request with auto-session enabled."""
+        # Mock successful session creation and API call
+        session_response = MagicMock()
+        session_response.json.return_value = {'result': 'session_key', 'error': None}
+        session_response.raise_for_status.return_value = None
+        
+        api_response = MagicMock()
+        api_response.json.return_value = {'result': 'test_result', 'error': None}
+        api_response.raise_for_status.return_value = None
+        
+        release_response = MagicMock()
+        release_response.raise_for_status.return_value = None
+        
+        # Return different responses for different calls
+        mock_post.side_effect = [session_response, api_response, release_response]
+
+        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=True)
+        result = api._make_request("test_method", ["param1"])
+        
+        assert result == 'test_result'
+        # Should make 3 calls: get_session_key, test_method, release_session_key
+        assert mock_post.call_count == 3
 
     def test_build_params(self):
         """Test parameter building with optional parameters."""
@@ -151,17 +186,46 @@ username = testuser
         result = api._build_params(["base1"], opt1="value1", opt2=None, opt3="value3")
         assert result == ["base1", "value1", "value3"]
 
-    def test_context_manager(self):
-        """Test context manager functionality."""
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass")
+    @patch('requests.post')
+    def test_connect_disconnect(self, mock_post):
+        """Test persistent session connect/disconnect functionality."""
+        # Mock session creation response
+        session_response = MagicMock()
+        session_response.json.return_value = {'result': 'session_key', 'error': None}
+        session_response.raise_for_status.return_value = None
         
-        with patch.object(api, '_get_session_key') as mock_get:
-            with patch.object(api, '_release_session_key') as mock_release:
-                with api:
-                    pass
-                
-                mock_get.assert_called_once()
-                mock_release.assert_called_once()
+        # Mock session release response
+        release_response = MagicMock()
+        release_response.raise_for_status.return_value = None
+        
+        mock_post.side_effect = [session_response, release_response]
+
+        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        
+        # Test connect
+        assert not api.is_connected()
+        api.connect()
+        assert api.is_connected()
+        assert api.session_key == "session_key"
+        assert api._persistent_session is True
+        
+        # Test disconnect
+        api.disconnect()
+        assert not api.is_connected()
+        assert api.session_key is None
+        assert api._persistent_session is False
+
+    def test_is_connected(self):
+        """Test is_connected method."""
+        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        
+        assert not api.is_connected()
+        
+        api.session_key = "test_session"
+        assert api.is_connected()
+        
+        api.session_key = None
+        assert not api.is_connected()
 
 
 class TestRequiresSessionDecorator:
@@ -172,6 +236,7 @@ class TestRequiresSessionDecorator:
         class MockClient:
             def __init__(self):
                 self.session_key = "test_session"
+                self.auto_session = True
         
         class MockManager:
             def __init__(self):
@@ -190,6 +255,7 @@ class TestRequiresSessionDecorator:
         class MockClient:
             def __init__(self):
                 self.session_key = None
+                self.auto_session = False
                 self.get_session_called = False
             
             def _get_session_key(self):
@@ -205,10 +271,27 @@ class TestRequiresSessionDecorator:
                 return "success"
         
         manager = MockManager()
+        with pytest.raises(Exception, match="No active session"):
+            manager.test_method()
+
+    def test_requires_session_auto_session_enabled(self):
+        """Test decorator when auto_session is enabled."""
+        class MockClient:
+            def __init__(self):
+                self.session_key = None
+                self.auto_session = True
+        
+        class MockManager:
+            def __init__(self):
+                self._client = MockClient()
+            
+            @requires_session
+            def test_method(self):
+                return "success"
+        
+        manager = MockManager()
         result = manager.test_method()
         assert result == "success"
-        assert manager._client.get_session_called
-        assert manager._client.session_key == "new_session"
 
 
 class TestQuestionManagerConditions:

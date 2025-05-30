@@ -77,6 +77,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IPython
 profile_default/
@@ -176,6 +177,23 @@ auth.ini
 *_credentials*
 *_secrets*
 *for_testing_only*
+*.key
+*.pem
+*.p12
+*.pfx
+config_*.ini
+creds_*.ini
+login_*.ini
+auth_*.json
+secret_*.json
+private_*.json
+api_keys.txt
+passwords.txt
+tokens.txt
+*_token*
+*_key*
+*_auth*
+*_login*
 
 # SURVEY DATA: Never commit actual survey data - SECURITY CRITICAL
 *survey_data*

@@ -11,8 +11,14 @@ def requires_session(func):
     """Decorator to ensure session key exists before API call."""
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        if not self._client.session_key:
-            self._client._get_session_key()
+        # If auto_session is enabled, the _make_request method handles sessions automatically
+        # If auto_session is disabled, we need a session key
+        if not self._client.auto_session and not self._client.session_key:
+            raise Exception(
+                "No active session. Either:\n"
+                "1. Call api.connect() for persistent session\n"
+                "2. Enable auto_session=True (default)"
+            )
         return func(self, *args, **kwargs)
     return wrapper
 

@@ -8,7 +8,7 @@ through dedicated manager classes.
 Features:
 - Read-only operations for maximum safety
 - Secure credential handling (environment variables, config files)
-- Automatic session management
+- Automatic session management for seamless usage
 - Comprehensive type hints and documentation
 - Debug logging support
 - Modular manager-based architecture following SOLID principles
@@ -21,30 +21,26 @@ Security Best Practices:
 - Monitor API access logs
 
 Example:
-    Basic usage with environment variables:
+    Simple usage:
     
-    import os
     from lime_survey_analyzer import LimeSurveyDirectAPI
     
+    # Create client and start using immediately
     api = LimeSurveyDirectAPI.from_env()
     
-    with api:
-        # Survey operations
-        surveys = api.surveys.list_surveys()
-        survey_data = api.surveys.get_survey_properties("123456")
-        
-        # Question operations
-        groups = api.questions.list_groups("123456")
-        questions = api.questions.list_questions("123456")
-        
-        # Response operations
-        responses = api.responses.export_responses("123456")
-        
-        # Participant operations
-        participants = api.participants.list_participants("123456")
-        
-        # Site operations
-        languages = api.site.get_available_site_languages()
+    # Survey operations
+    surveys = api.surveys.list_surveys()
+    survey_data = api.surveys.get_survey_properties("123456")
+    
+    # Question operations
+    groups = api.questions.list_groups("123456")
+    questions = api.questions.list_questions("123456")
+    
+    # Response operations
+    responses = api.responses.export_responses("123456")
+    
+    # Participant operations
+    participants = api.participants.list_participants("123456")
 
 Author: Generated for LimeSurvey API integration
 """
@@ -73,11 +69,13 @@ class LimeSurveyDirectAPI:
     - responses: Response data and statistics
     - participants: Participant management
     
-    The client handles session management automatically and can be used as a context manager
-    for automatic cleanup.
+    Session Management Modes:
+    1. Auto-session (default): Automatically manages sessions per request - perfect for scripts
+    2. Persistent session: Call connect() once, use until disconnect() - efficient for applications
     """
     
-    def __init__(self, url: str, username: str, password: str, debug: bool = False):
+    def __init__(self, url: str, username: str, password: str, debug: bool = False, 
+                 auto_session: bool = True):
         """
         Initialize the LimeSurvey API client.
         
@@ -86,14 +84,18 @@ class LimeSurveyDirectAPI:
             username: LimeSurvey username
             password: LimeSurvey password  
             debug: Enable debug logging for API requests
+            auto_session: If True, automatically manage sessions per request (default)
+                         If False, use connect()/disconnect() for explicit session control
         """
         self.url = url.rstrip('/')
         self.username = username
         self.password = password
         self._password = password  # For backward compatibility with tests
         self.debug = debug
+        self.auto_session = auto_session
         self.session_key = None
         self._request_id = 0
+        self._persistent_session = False
         
         # Validate URL
         if not url.startswith(('http://', 'https://')):
@@ -115,153 +117,183 @@ class LimeSurveyDirectAPI:
         self.participants = ParticipantManager(self)
         
     @classmethod
-    def from_env(cls, debug: bool = False) -> 'LimeSurveyDirectAPI':
-        """Create API client from environment variables.
+    def from_env(cls, debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
+        """
+        Create API client from environment variables.
         
         Required environment variables:
-            LIMESURVEY_URL: LimeSurvey RemoteControl API URL
-            LIMESURVEY_USERNAME: LimeSurvey username
-            LIMESURVEY_PASSWORD: LimeSurvey password
-            
+        - LIMESURVEY_URL: Full URL to RemoteControl endpoint
+        - LIMESURVEY_USERNAME: LimeSurvey username  
+        - LIMESURVEY_PASSWORD: LimeSurvey password
+        
         Args:
             debug: Enable debug logging
+            auto_session: Enable automatic session management (default: True)
             
         Returns:
-            LimeSurveyDirectAPI: Configured API client
+            Configured LimeSurveyDirectAPI instance
             
         Raises:
             ValueError: If required environment variables are missing
-            
-        Example:
-            export LIMESURVEY_URL="https://survey.example.com/admin/remotecontrol"
-            export LIMESURVEY_USERNAME="api_user"
-            export LIMESURVEY_PASSWORD="secure_password"
-            
-            api = LimeSurveyDirectAPI.from_env()
         """
         url = os.getenv('LIMESURVEY_URL')
-        username = os.getenv('LIMESURVEY_USERNAME')
+        username = os.getenv('LIMESURVEY_USERNAME')  
         password = os.getenv('LIMESURVEY_PASSWORD')
         
         if not all([url, username, password]):
-            missing = [var for var, val in [
+            missing = [name for name, value in [
                 ('LIMESURVEY_URL', url),
-                ('LIMESURVEY_USERNAME', username),
+                ('LIMESURVEY_USERNAME', username), 
                 ('LIMESURVEY_PASSWORD', password)
-            ] if not val]
+            ] if not value]
             raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
         
-        return cls(url, username, password, debug)
+        return cls(url, username, password, debug, auto_session)
     
     @classmethod
-    def from_config(cls, config_path: Union[str, Path], section: str = 'limesurvey', debug: bool = False) -> 'LimeSurveyDirectAPI':
-        """Create API client from configuration file.
+    def from_config(cls, config_path: str = 'credentials.ini', debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
+        """
+        Create API client from configuration file.
+        
+        Expected config file format:
+        [limesurvey]
+        url = https://your-limesurvey.com/admin/remotecontrol
+        username = your_username
+        password = your_password
         
         Args:
-            config_path: Path to configuration file (.ini format)
-            section: Configuration section name
-            debug: Enable debug logging
+            config_path: Path to configuration file
+            debug: Enable debug logging  
+            auto_session: Enable automatic session management (default: True)
             
         Returns:
-            LimeSurveyDirectAPI: Configured API client
+            Configured LimeSurveyDirectAPI instance
             
         Raises:
             FileNotFoundError: If config file doesn't exist
             ValueError: If required config values are missing
-            
-        Example config file (credentials.ini):
-            [limesurvey]
-            url = https://survey.example.com/admin/remotecontrol
-            username = api_user
-            password = secure_password
-            
-        Usage:
-            api = LimeSurveyDirectAPI.from_config('credentials.ini')
         """
-        config_path = Path(config_path)
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
-        
+        config_file = Path(config_path)
+        if not config_file.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+            
         config = configparser.ConfigParser()
-        config.read(config_path)
+        config.read(config_file)
         
-        if section not in config:
-            raise ValueError(f"Section '{section}' not found in config file")
-        
-        section_config = config[section]
+        if 'limesurvey' not in config:
+            raise ValueError("Configuration file must contain [limesurvey] section")
+            
+        section = config['limesurvey']
         required_keys = ['url', 'username', 'password']
-        missing_keys = [key for key in required_keys if key not in section_config]
+        missing_keys = [key for key in required_keys if key not in section]
         
         if missing_keys:
-            raise ValueError(f"Missing required config keys in section '{section}': {', '.join(missing_keys)}")
-        
+            raise ValueError(f"Missing required configuration keys: {', '.join(missing_keys)}")
+            
         return cls(
-            url=section_config['url'],
-            username=section_config['username'],
-            password=section_config['password'],
-            debug=debug
+            section['url'], 
+            section['username'], 
+            section['password'], 
+            debug,
+            auto_session
         )
     
-    @classmethod
-    def from_prompt(cls, url: Optional[str] = None, username: Optional[str] = None, debug: bool = False) -> 'LimeSurveyDirectAPI':
-        """Create API client with interactive credential prompting.
+    @classmethod  
+    def from_prompt(cls, debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
+        """
+        Create API client with interactive credential prompts.
         
         Args:
-            url: LimeSurvey URL (will prompt if not provided)
-            username: Username (will prompt if not provided)
             debug: Enable debug logging
+            auto_session: Enable automatic session management (default: True)
             
         Returns:
-            LimeSurveyDirectAPI: Configured API client
-            
-        Example:
-            api = LimeSurveyDirectAPI.from_prompt()
-            # Will interactively prompt for URL, username, and password
+            Configured LimeSurveyDirectAPI instance
         """
-        if url is None:
-            url = input("LimeSurvey URL (e.g., https://survey.example.com/admin/remotecontrol): ")
+        print("Enter LimeSurvey credentials:")
+        url = input("URL (e.g., https://survey.example.com/admin/remotecontrol): ").strip()
+        username = input("Username: ").strip()
+        password = getpass.getpass("Password: ").strip()
         
-        if username is None:
-            username = input("Username: ")
-        
-        password = getpass.getpass("Password: ")
-        
-        return cls(url, username, password, debug)
+        return cls(url, username, password, debug, auto_session)
     
+    def connect(self):
+        """
+        Establish a persistent session for multiple API calls.
+        
+        Use this for long-running applications or when making many API calls.
+        Call disconnect() when done to clean up the session.
+        
+        Example:
+            api = LimeSurveyDirectAPI.from_env(auto_session=False)
+            api.connect()
+            
+            # Make multiple calls efficiently
+            surveys = api.surveys.list_surveys()
+            questions = api.questions.list_questions(surveys[0]['sid'])
+            responses = api.responses.export_responses(surveys[0]['sid'])
+            
+            api.disconnect()
+        """
+        if not self.session_key:
+            self._get_session_key()
+            self._persistent_session = True
+        return self
+    
+    def disconnect(self):
+        """
+        Close the persistent session and clean up resources.
+        
+        Call this when done with a persistent session to properly
+        release the session on the LimeSurvey server.
+        """
+        if self._persistent_session:
+            self._release_session_key()
+            self._persistent_session = False
+    
+    def is_connected(self) -> bool:
+        """
+        Check if there's an active session.
+        
+        Returns:
+            True if connected with an active session key, False otherwise
+        """
+        return self.session_key is not None
+
     def _make_request(self, method: str, params: List[Any]) -> Any:
         """
         Make a JSON-RPC request to the LimeSurvey API.
         
         Args:
-            method: API method name
-            params: List of parameters for the method
+            method: LimeSurvey API method name
+            params: List of parameters for the API call
             
         Returns:
             API response data
             
         Raises:
-            Exception: If request fails or API returns an error
+            Exception: If the API request fails or returns an error
         """
-        self._request_id += 1
-        
-        payload = {
-            "method": method,
-            "params": params,
-            "id": self._request_id,
-            "jsonrpc": "2.0"
-        }
-        
-        if self.debug:
-            # Sanitize password from debug output
-            sanitized_params = []
-            for param in params:
-                if isinstance(param, str) and param == self.password:
-                    sanitized_params.append("***PASSWORD***")
-                else:
-                    sanitized_params.append(param)
-            print(f"API Request: {method} with params: {sanitized_params}")
+        if self.auto_session and not self.session_key:
+            # Auto-session mode: temporarily get session for this request
+            temp_session = True
+            self._get_session_key()
+        else:
+            temp_session = False
         
         try:
+            self._request_id += 1
+            
+            payload = {
+                "method": method,
+                "params": params,
+                "id": self._request_id
+            }
+            
+            if self.debug:
+                # Only log method and param count for security
+                print(f"DEBUG: Making request to {method} with {len(params)} parameters")
+            
             response = requests.post(
                 self.url,
                 json=payload,
@@ -269,23 +301,17 @@ class LimeSurveyDirectAPI:
             )
             response.raise_for_status()
             
-            data = response.json()
+            result = response.json()
             
-            if self.debug:
-                print(f"API Response: {data}")
+            if 'error' in result and result['error'] is not None:
+                raise Exception(f"API Error: {result['error']}")
             
-            if 'error' in data and data['error'] is not None:
-                error_msg = data['error']
-                if isinstance(error_msg, dict):
-                    error_msg = f"{error_msg.get('code', 'Unknown')}: {error_msg.get('message', 'Unknown error')}"
-                raise Exception(f"API Error: {error_msg}")
+            return result['result']
             
-            return data.get('result')
-            
-        except requests.RequestException as e:
-            raise Exception(f"HTTP Error: {e}")
-        except json.JSONDecodeError as e:
-            raise Exception(f"JSON decode error: {e}")
+        finally:
+            # Clean up temporary session if auto-session mode
+            if temp_session and self.auto_session:
+                self._release_session_key()
     
     def _get_session_key(self) -> str:
         """
@@ -294,20 +320,59 @@ class LimeSurveyDirectAPI:
         Returns:
             Session key string for authenticated requests
         """
-        result = self._make_request("get_session_key", [self.username, self.password])
+        # Make direct request to avoid recursion with _make_request
+        self._request_id += 1
         
-        if isinstance(result, dict) and 'status' in result:
+        payload = {
+            "method": "get_session_key",
+            "params": [self.username, self.password],
+            "id": self._request_id
+        }
+        
+        if self.debug:
+            print(f"DEBUG: Authenticating with LimeSurvey")
+        
+        response = requests.post(
+            self.url,
+            json=payload,
+            headers={'Content-Type': 'application/json'}
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        if 'error' in result and result['error'] is not None:
+            raise Exception(f"API Error: {result['error']}")
+        
+        session_result = result['result']
+        
+        if isinstance(session_result, dict) and 'status' in session_result:
             # Error response format
-            raise Exception(f"Authentication failed: {result.get('status', 'Unknown error')}")
+            raise Exception(f"Authentication failed: {session_result.get('status', 'Unknown error')}")
         
-        self.session_key = result
-        return result
+        self.session_key = session_result
+        return session_result
     
     def _release_session_key(self) -> None:
         """Release the current session key."""
         if self.session_key:
             try:
-                self._make_request("release_session_key", [self.session_key])
+                # Make direct request to avoid recursion with _make_request
+                self._request_id += 1
+                
+                payload = {
+                    "method": "release_session_key",
+                    "params": [self.session_key],
+                    "id": self._request_id
+                }
+                
+                response = requests.post(
+                    self.url,
+                    json=payload,
+                    headers={'Content-Type': 'application/json'}
+                )
+                response.raise_for_status()
+                
             except Exception:
                 # Ignore errors when releasing session - server might have already cleaned up
                 pass
@@ -331,12 +396,4 @@ class LimeSurveyDirectAPI:
                 params.append(value)
         return params
     
-    def __enter__(self):
-        """Context manager entry - establish session."""
-        self._get_session_key()
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - cleanup session."""
-        self._release_session_key()
-        return False 
+    # Session management methods for explicit control when needed 

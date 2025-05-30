@@ -46,7 +46,7 @@ A comprehensive, **read-only** Python client for LimeSurvey's RemoteControl 2 AP
 - 📊 **Graph Visualization**: Visualize conditional question logic and survey flow (optional)
 - 🐍 **Pythonic & Type-Safe**: Clean interface with full type hints for better IDE support
 - 🛡️ **Production Ready**: Robust error handling, automatic session management, and secure credential handling
-- 🔄 **Context Manager Support**: Automatic cleanup of API sessions
+- 🔄 **Automatic Session Management**: Sessions handled transparently for seamless usage
 - 🐛 **Debug Support**: Optional debug logging with sensitive data protection
 - ✅ **Comprehensive Testing**: 70% test coverage with 48 automated tests
 
@@ -85,7 +85,62 @@ pip install -e ".[dev]"
 
 **📋 Before running examples**: Make sure you've installed the package first with `pip install -e .` from the project root directory.
 
-### 1. Using Environment Variables (Recommended)
+### 🎯 **Simple Usage (Recommended)**
+
+For scripts and simple data extraction, just create an API client and start using it:
+
+```python
+from lime_survey_analyzer import LimeSurveyDirectAPI
+
+# Create client from environment variables  
+api = LimeSurveyDirectAPI.from_env()
+
+# Just use the API directly - sessions are handled automatically
+surveys = api.surveys.list_surveys()
+for survey in surveys:
+    print(f"Survey {survey['sid']}: {survey['surveyls_title']}")
+
+# Get survey details
+survey_props = api.surveys.get_survey_properties("123456")
+print(f"Survey status: {survey_props['active']}")
+
+# Work with questions and responses
+questions = api.questions.list_questions("123456")
+responses = api.responses.export_responses("123456", "json")
+stats = api.responses.export_statistics("123456")
+```
+
+### 🏢 **Application Usage**
+
+For applications that make many API calls, use persistent sessions for better performance:
+
+```python
+from lime_survey_analyzer import LimeSurveyDirectAPI
+
+# Create client with persistent session mode
+api = LimeSurveyDirectAPI.from_env(auto_session=False)
+api.connect()  # Establish one session for all operations
+
+try:
+    # Efficiently make multiple calls with a single session
+    surveys = api.surveys.list_surveys()
+    
+    for survey in surveys[:3]:
+        survey_id = survey['sid']
+        props = api.surveys.get_survey_properties(survey_id)
+        questions = api.questions.list_questions(survey_id)
+        
+        if props['active'] == 'Y':
+            responses = api.responses.export_responses(survey_id)
+            print(f"Exported {len(responses)} responses from {props['surveyls_title']}")
+            
+finally:
+    api.disconnect()  # Clean up the session
+```
+
+### 📋 **Authentication Options**
+
+#### 1. Environment Variables (Recommended)
 
 Set your credentials as environment variables:
 ```bash
@@ -94,35 +149,7 @@ export LIMESURVEY_USERNAME="your_username"
 export LIMESURVEY_PASSWORD="your_password"
 ```
 
-Then use the API:
-```python
-from lime_survey_analyzer import LimeSurveyDirectAPI
-
-# Create client from environment variables
-api = LimeSurveyDirectAPI.from_env()
-
-# Use context manager for automatic session management
-with api:
-    # Survey operations through surveys manager
-    surveys = api.surveys.list_surveys()
-    for survey in surveys:
-        print(f"Survey {survey['sid']}: {survey['surveyls_title']}")
-    
-    # Get survey details
-    survey_props = api.surveys.get_survey_properties("123456")
-    print(f"Survey status: {survey_props['active']}")
-    
-    # Question operations through questions manager
-    questions = api.questions.list_questions("123456")
-    
-    # Response operations through responses manager
-    responses = api.responses.export_responses("123456", "json")
-    
-    # Statistics
-    stats = api.responses.export_statistics("123456")
-```
-
-### 2. Using Configuration File
+#### 2. Configuration File
 
 Create a `credentials.ini` file:
 ```ini
@@ -136,29 +163,61 @@ password = your_password
 from lime_survey_analyzer import LimeSurveyDirectAPI
 
 api = LimeSurveyDirectAPI.from_config('credentials.ini')
-with api:
-    surveys = api.surveys.list_surveys()
+surveys = api.surveys.list_surveys()
 ```
 
-### 3. Interactive Prompts
+#### 3. Interactive Prompts
 
 ```python
 from lime_survey_analyzer import LimeSurveyDirectAPI
 
 # Will prompt for credentials
 api = LimeSurveyDirectAPI.from_prompt()
-with api:
-    surveys = api.surveys.list_surveys()
+surveys = api.surveys.list_surveys()
 ```
 
 ## 📋 API Reference
 
-The API is organized into specialized managers for different types of operations:
+The API is organized into specialized managers for different types of operations.
+
+### 🔄 **Session Management**
+
+The API handles session management automatically in two ways:
+
+**For Scripts & Simple Usage:**
+```python
+api = LimeSurveyDirectAPI.from_env()  # Sessions handled automatically
+surveys = api.surveys.list_surveys()  # Just use the API directly
+```
+
+**For Applications with Many Calls:**
+```python
+api = LimeSurveyDirectAPI.from_env(auto_session=False)
+api.connect()                          # One session for everything
+surveys = api.surveys.list_surveys()   # Efficient - reuses session
+questions = api.questions.list_questions("123456")  # Same session
+api.disconnect()                       # Clean up when done
+```
+
+### 🏷️ **Naming Conventions**
+
+Our API follows consistent naming patterns:
+- **`list_*()`** - Get multiple items (list of surveys, questions, participants, etc.)
+- **`get_*()`** - Get detailed info about a single item (survey properties, question details, etc.)  
+- **`export_*()`** - Export data in various formats (responses, statistics, etc.)
 
 ### 📊 Survey Manager (`api.surveys`)
 
 Access survey-level information and metadata:
 
+```python
+api = LimeSurveyDirectAPI.from_env()
+surveys = api.surveys.list_surveys()
+survey_props = api.surveys.get_survey_properties("123456")
+summary = api.surveys.get_summary("123456")
+```
+
+**Methods:**
 - `list_surveys()` - Get all surveys you have access to with basic metadata
 - `get_survey_properties(survey_id)` - Get comprehensive survey settings, status, and configuration
 - `get_summary(survey_id)` - Get response count, completion statistics, and survey summary
@@ -167,12 +226,32 @@ Access survey-level information and metadata:
 
 Explore survey structure and question details:
 
+```python
+api = LimeSurveyDirectAPI.from_env()
+
+# Get question groups (note: groups belong to questions manager, not surveys)
+groups = api.questions.list_groups("123456")
+group_props = api.questions.get_group_properties("789")
+
+# Get all questions in a survey
+questions = api.questions.list_questions("123456")
+question_props = api.questions.get_question_properties("999")
+
+# Get conditional logic (legacy system)
+conditions = api.questions.list_conditions("123456")
+detailed_conditions = api.questions.get_conditions("123456", "999")
+```
+
+**Methods:**
 - `list_groups(survey_id)` - Get question groups with titles, descriptions, and ordering
 - `get_group_properties(group_id)` - Get detailed group configuration and settings
 - `list_questions(survey_id)` - Get all questions with types, codes, and basic properties
 - `get_question_properties(question_id)` - Get complete question metadata including validation rules and display logic
 - `list_conditions(survey_id, question_id=None)` - Get legacy condition rules that control question visibility
 - `get_conditions(survey_id, question_id)` - Get detailed condition information for specific questions
+
+**❓ Why are groups under `questions` manager?** 
+In LimeSurvey's architecture, groups are containers that organize questions within a survey. Since they're primarily used for question organization and the API treats them as part of the question structure, we've grouped them with question operations for logical consistency.
 
 **Conditional Questions**: LimeSurvey supports two systems for conditional logic:
 - **Modern**: Relevance equations (found in `get_question_properties()` under 'relevance')
@@ -184,6 +263,26 @@ Both systems control when questions are shown to respondents based on previous a
 
 Export and analyze survey response data:
 
+```python
+api = LimeSurveyDirectAPI.from_env()
+
+# Export all responses in JSON format
+responses = api.responses.export_responses("123456", format="json")
+
+# Export responses for a specific participant
+participant_responses = api.responses.export_responses_by_token("123456", "ABC123", format="json")
+
+# Export statistical summary
+stats = api.responses.export_statistics("123456", format="pdf")
+
+# Get response IDs (all responses)
+all_ids = api.responses.get_all_response_ids("123456")
+
+# Get response IDs for specific participant (requires token)
+participant_ids = api.responses.get_response_ids("123456", "ABC123")
+```
+
+**Methods:**
 - `export_responses(survey_id, format="json")` - Export responses in various formats (JSON, CSV, Excel, PDF)
 - `export_responses_by_token(survey_id, token, format="json")` - Export responses for specific participants
 - `export_statistics(survey_id, format="pdf")` - Generate statistical summaries and reports
@@ -196,6 +295,18 @@ Export and analyze survey response data:
 
 Manage participant data (when participant tables are enabled):
 
+```python
+api = LimeSurveyDirectAPI.from_env()
+
+# Get all participants
+participants = api.participants.list_participants("123456")
+
+# Search for specific participants
+query = {"token": "ABC123"}
+participant_details = api.participants.get_participant_properties("123456", query)
+```
+
+**Methods:**
 - `list_participants(survey_id)` - Get participant list with contact information and status
 - `get_participant_properties(survey_id, query)` - Get detailed participant metadata and custom attributes
 
