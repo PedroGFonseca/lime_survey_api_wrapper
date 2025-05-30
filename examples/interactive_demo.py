@@ -466,6 +466,65 @@ def demo_condition_analysis(api, survey_id):
 
 demo_condition_analysis(api, survey_id) if survey_id else None
 
+# === CELL: Graph Visualization Demo ===
+print_section("Conditional Graph Visualization", "📊")
+
+def demo_graph_visualization(api, survey_id):
+    """Demonstrate graph visualization of conditional logic"""
+    
+    if not survey_id:
+        print_error("No survey ID available for graph visualization")
+        return
+        
+    print(f"📊 Creating conditional logic graph for survey {survey_id}...")
+    
+    try:
+        # Import visualization module
+        from lime_survey_analyzer.visualizations import create_survey_graph
+        
+        # Create the graph
+        results = create_survey_graph(api, survey_id, output_path="survey_conditional_graph")
+        
+        print_success("Graph analysis completed!")
+        print_info("Parser supports both numeric IDs and LimeSurvey question codes (e.g., G01Q01.NAOK)")
+        
+        if results['graphviz_available']:
+            if results['graph_image']:
+                print(f"🖼️ Graph image saved: {results['graph_image']}")
+            else:
+                print_info("Graph image could not be generated")
+        else:
+            print_info("Graphviz not available - only JSON export created")
+        
+        print(f"📄 Graph data exported: {results['json_export']}")
+        
+        # Show analysis summary
+        analysis = results['analysis']
+        print(f"\n📈 Graph Statistics:")
+        print(f"   🔗 Total Dependencies: {analysis['total_edges']}")
+        print(f"   🎯 Dependent Questions: {analysis['dependent_questions']}")
+        print(f"   🚀 Trigger Questions: {analysis['trigger_questions']}")
+        print(f"   🏝️ Independent Questions: {analysis['isolated_questions']}")
+        
+        if analysis['legacy_conditions'] > 0:
+            print(f"   📜 Legacy Conditions: {analysis['legacy_conditions']}")
+        if analysis['relevance_conditions'] > 0:
+            print(f"   🔧 Relevance Conditions: {analysis['relevance_conditions']}")
+        
+        return results
+        
+    except ImportError:
+        print_error("Graph visualization not available")
+        print_info("To enable graph visualization:")
+        print_info("  macOS: brew install graphviz && pip install graphviz")
+        print_info("  Linux: sudo apt-get install graphviz && pip install graphviz")
+        return None
+    except Exception as e:
+        print_error(f"Graph visualization failed: {e}")
+        return None
+
+demo_graph_visualization(api, survey_id) if survey_id else None
+
 # === CELL: Response Manager Demo ===
 print_section("Response Manager - Survey Data", "📈")
 

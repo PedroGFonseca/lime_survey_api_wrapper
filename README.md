@@ -43,10 +43,12 @@ A comprehensive, **read-only** Python client for LimeSurvey's RemoteControl 2 AP
 - 🔒 **Multiple Authentication Methods**: Environment variables, config files, or interactive prompts
 - 📊 **Comprehensive Data Export**: Get survey responses in JSON, CSV, Excel, PDF formats
 - 📈 **Built-in Analytics**: Export detailed statistics and summaries
+- 📊 **Graph Visualization**: Visualize conditional question logic and survey flow (optional)
 - 🐍 **Pythonic & Type-Safe**: Clean interface with full type hints for better IDE support
 - 🛡️ **Production Ready**: Robust error handling, automatic session management, and secure credential handling
 - 🔄 **Context Manager Support**: Automatic cleanup of API sessions
 - 🐛 **Debug Support**: Optional debug logging with sensitive data protection
+- ✅ **Comprehensive Testing**: 70% test coverage with 48 automated tests
 
 ## 📦 Installation
 
@@ -199,6 +201,52 @@ Manage participant data (when participant tables are enabled):
 
 **Note**: Many surveys use anonymous responses and don't have participant tables, which will result in "No survey participants table" errors. This is normal behavior for anonymous surveys.
 
+## 📊 Graph Visualization (Optional)
+
+**NEW**: Visualize conditional question dependencies as interactive graphs!
+
+The conditional nature of LimeSurvey questions forms a directed graph where:
+- **Nodes**: Questions (colored by type: mandatory=red, hidden=gray, optional=blue)
+- **Edges**: Conditional dependencies with logic labels
+- **Groups**: Questions grouped by survey sections
+
+### 🔧 Installation (Optional)
+
+Graph visualization requires Graphviz:
+
+```bash
+# macOS
+brew install graphviz
+pip3 install graphviz
+
+# Linux (Ubuntu/Debian)
+sudo apt-get install graphviz
+pip3 install graphviz
+
+# Linux (RHEL/CentOS)
+sudo yum install graphviz
+pip3 install graphviz
+```
+
+### 📊 Usage
+
+```python
+from lime_survey_analyzer.visualizations import create_survey_graph
+
+# Create complete conditional graph
+results = create_survey_graph(api, survey_id, output_path="my_survey_graph")
+
+# Results include:
+# - PNG/SVG visualization (if Graphviz available)
+# - JSON data export (always available)
+# - Graph analysis statistics
+```
+
+**Graceful Fallbacks**: If Graphviz isn't installed, the system:
+- ✅ Still exports JSON data for other visualization tools
+- ✅ Provides helpful installation instructions
+- ✅ Never breaks your main workflow
+
 ## ⚠️ Permissions & Limitations
 
 This library only includes API methods that:
@@ -212,109 +260,3 @@ This library only includes API methods that:
 - User management functions (admin-only)
 
 If you encounter "Permission denied" errors, your LimeSurvey user account may not have sufficient privileges for certain operations. Contact your LimeSurvey administrator to request additional permissions if needed.
-
-## 💡 Why Use This Library?
-
-### 🎯 **Organized & Intuitive**
-Instead of memorizing dozens of API methods, operations are logically grouped by purpose. Need survey info? Use `api.surveys`. Working with responses? Use `api.responses`.
-
-### 🔍 **Type-Safe Development**
-Full type hints mean your IDE can help you with autocompletion, parameter validation, and catching errors before runtime.
-
-### 📊 **Rich Data Export Options**
-Get your data in the format you need - JSON for programmatic processing, CSV for spreadsheets, PDF for reports, or Excel for advanced analysis.
-
-### 🛡️ **Production Ready**
-Built-in security best practices, automatic session management, comprehensive error handling, and support for multiple authentication methods.
-
-### 🔒 **Secure by Default**
-Multiple secure credential handling options, automatic credential sanitization in logs, and HTTPS validation.
-
-## 🔒 Security Best Practices
-
-1. **Never hardcode credentials** in your source code
-2. **Use HTTPS** for production environments
-3. **Store credentials securely** using environment variables or encrypted config files
-4. **Regularly rotate** API credentials
-5. **Monitor API access** logs for unauthorized usage
-6. **Use virtual environments** to isolate dependencies
-
-## 🔧 Development
-
-### Running Tests
-```bash
-pytest
-```
-
-### Code Formatting
-```bash
-black src tests
-isort src tests
-```
-
-### Type Checking
-```bash
-mypy src
-```
-
-### Building Documentation
-```bash
-cd docs
-make html
-```
-
-The documentation will be available at `docs/_build/html/index.html`.
-
-## 📚 Documentation
-
-Full documentation is available in the `docs/` directory. To build and view:
-
-```bash
-# Install documentation dependencies
-pip install -e ".[docs]"
-
-# Build documentation
-cd docs
-make html
-
-# Open in browser
-open _build/html/index.html  # macOS
-xdg-open _build/html/index.html  # Linux
-```
-
-## ⚙️ Requirements
-
-- Python 3.8+
-- requests >= 2.25.0
-- LimeSurvey instance with RemoteControl API enabled
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 🆘 Support
-
-For support and questions:
-
-- Check the [documentation](docs/)
-- Review existing [issues](https://github.com/example/lime-survey-analyzer/issues)
-- Create a new issue for bugs or feature requests
-
-## 📝 Changelog
-
-### Version 1.0.0
-- ✅ Complete LimeSurvey RemoteControl API coverage with 13 reliable methods
-- ✅ Manager-based architecture for organized access to different operation types
-- ✅ Multiple secure authentication methods (environment variables, config files, interactive)
-- ✅ Comprehensive data export capabilities (JSON, CSV, Excel, PDF, XML)
-- ✅ Full type hints and modern Python features
-- ✅ Production-ready error handling and session management
-- ✅ Extensive documentation and examples 

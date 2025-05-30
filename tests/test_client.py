@@ -242,12 +242,20 @@ class TestQuestionManagerConditions:
         
         manager = QuestionManager(mock_client)
         
-        with patch.object(manager, '_make_request') as mock_request:
+        with patch.object(manager, '_make_request') as mock_request, \
+             patch.object(manager, '_build_params') as mock_build_params:
+            
             mock_request.return_value = expected_conditions
+            mock_build_params.return_value = ["test_session", "987654"]
             
             result = manager.list_conditions("987654")
             
-            # Verify correct API call
+            # Verify correct _build_params call
+            mock_build_params.assert_called_once_with(
+                ["test_session", "987654"],
+                question_id=None
+            )
+            # Verify _make_request call with built params
             mock_request.assert_called_once_with("list_conditions", ["test_session", "987654"])
             assert result == expected_conditions
             
@@ -270,12 +278,20 @@ class TestQuestionManagerConditions:
         
         manager = QuestionManager(mock_client)
         
-        with patch.object(manager, '_make_request') as mock_request:
+        with patch.object(manager, '_make_request') as mock_request, \
+             patch.object(manager, '_build_params') as mock_build_params:
+            
             mock_request.return_value = expected_conditions
+            mock_build_params.return_value = ["test_session", "987654", "123"]
             
             result = manager.list_conditions("987654", "123")
             
-            # Verify correct API call with question_id parameter
+            # Verify correct _build_params call with question_id
+            mock_build_params.assert_called_once_with(
+                ["test_session", "987654"],
+                question_id="123"
+            )
+            # Verify _make_request call with built params
             mock_request.assert_called_once_with("list_conditions", ["test_session", "987654", "123"])
             assert result == expected_conditions
             
@@ -307,12 +323,17 @@ class TestQuestionManagerConditions:
         
         manager = QuestionManager(mock_client)
         
-        with patch.object(manager, '_make_request') as mock_request:
+        with patch.object(manager, '_make_request') as mock_request, \
+             patch.object(manager, '_build_params') as mock_build_params:
+            
             mock_request.return_value = expected_conditions
+            mock_build_params.return_value = ["test_session", "987654", "123"]
             
             result = manager.get_conditions("987654", "123")
             
-            # Verify correct API call
+            # Verify correct _build_params call
+            mock_build_params.assert_called_once_with(["test_session", "987654", "123"])
+            # Verify _make_request call with built params
             mock_request.assert_called_once_with("get_conditions", ["test_session", "987654", "123"])
             assert result == expected_conditions
             
