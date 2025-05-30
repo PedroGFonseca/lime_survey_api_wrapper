@@ -182,22 +182,40 @@ The API is organized into specialized managers for different types of operations
 
 ### 🔄 **Session Management**
 
-The API handles session management automatically in two ways:
+The API uses a robust session management system with clean separation of concerns:
 
-**For Scripts & Simple Usage:**
+**Auto-Session Mode (Default - Perfect for Scripts):**
 ```python
-api = LimeSurveyDirectAPI.from_env()  # Sessions handled automatically
-surveys = api.surveys.list_surveys()  # Just use the API directly
+api = LimeSurveyDirectAPI.from_env()        # Sessions handled automatically
+surveys = api.surveys.list_surveys()        # Creates session, makes call, cleans up
+questions = api.questions.list_questions("123456")  # New session for each call
 ```
 
-**For Applications with Many Calls:**
+**Persistent Session Mode (Efficient for Applications):**
 ```python
 api = LimeSurveyDirectAPI.from_env(auto_session=False)
-api.connect()                          # One session for everything
-surveys = api.surveys.list_surveys()   # Efficient - reuses session
+api.connect()                                # One session for everything  
+surveys = api.surveys.list_surveys()        # Reuses existing session
 questions = api.questions.list_questions("123456")  # Same session
-api.disconnect()                       # Clean up when done
+responses = api.responses.export_responses("123456")  # Same session
+api.disconnect()                             # Clean up when done
 ```
+
+**Session State Management:**
+```python
+# Check connection status
+if api.is_connected():
+    print(f"Connected with session: {api.session_key}")
+
+# Session is automatically managed - no manual key handling needed
+# The SessionManager handles authentication, cleanup, and error recovery
+```
+
+**Key Benefits:**
+- 🔒 **Secure**: Automatic session cleanup prevents key leaks
+- 🚀 **Efficient**: Persistent mode minimizes authentication overhead  
+- 🛡️ **Robust**: Graceful error handling and recovery
+- 🧪 **Testable**: Clean separation of concerns for comprehensive testing
 
 ### 🏷️ **Naming Conventions**
 
