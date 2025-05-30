@@ -3,9 +3,41 @@
 LimeSurvey Analyzer - Basic Usage Example
 
 This script demonstrates basic usage of the LimeSurvey Analyzer library.
+
+Setup Instructions:
+1. Clone the repository: git clone <repo_url>
+2. Navigate to the project: cd lime_survey_analyzer  
+3. Install in development mode: pip install -e .
+4. Run this example: python examples/basic_usage.py
+
+For Jupyter notebooks, ensure you've installed the package first.
 """
 
-from lime_survey_analyzer import LimeSurveyDirectAPI
+try:
+    from lime_survey_analyzer import LimeSurveyDirectAPI
+except ImportError as e:
+    print("❌ Error: lime_survey_analyzer module not found!")
+    print("\n📋 Setup Instructions:")
+    print("1. Navigate to the project root directory")
+    print("2. Install the package: pip install -e .")
+    print("3. Run this example again")
+    print(f"\nTechnical error: {e}")
+    exit(1)
+
+import sys
+import os
+
+# Add the src directory to the path so we can import the module
+# Handle both standalone scripts and Jupyter notebooks
+try:
+    # For standalone scripts
+    script_dir = os.path.dirname(os.path.dirname(__file__))
+    sys.path.insert(0, os.path.join(script_dir, 'src'))
+except NameError:
+    # For Jupyter notebooks - assume we're in examples/ directory
+    # Users should run: %cd /path/to/lime_survey_analyzer before importing
+    sys.path.insert(0, '../src')
+
 import json
 from pprint import pprint
 
@@ -76,7 +108,8 @@ def main():
         print(f"\n📈 Getting response data...")
         
         # Get response IDs
-        response_ids = api.responses.get_response_ids(survey_id)
+        print("\n📊 Getting response IDs...")
+        response_ids = api.responses.get_all_response_ids(survey_id)
         print(f"Total responses: {len(response_ids)}")
         
         if response_ids:

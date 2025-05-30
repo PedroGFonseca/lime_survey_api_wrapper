@@ -178,14 +178,17 @@ Explore survey structure and question details:
 
 Both systems control when questions are shown to respondents based on previous answers.
 
-### 📈 Response Manager (`api.responses`)
+### 📊 Response Manager (`api.responses`)
 
 Export and analyze survey response data:
 
-- `export_responses(survey_id, document_type='json', ...)` - Export response data in JSON, CSV, Excel, XML, or PDF formats
-- `export_responses_by_token(survey_id, document_type='json', token=None, ...)` - Export responses for specific participant tokens
-- `export_statistics(survey_id, doc_type='pdf')` - Generate comprehensive statistical reports with charts and analysis
-- `get_response_ids(survey_id, token=None)` - Get list of response IDs for further processing
+- `export_responses(survey_id, format="json")` - Export responses in various formats (JSON, CSV, Excel, PDF)
+- `export_responses_by_token(survey_id, token, format="json")` - Export responses for specific participants
+- `export_statistics(survey_id, format="pdf")` - Generate statistical summaries and reports
+- `get_response_ids(survey_id, token)` - Get response IDs for a specific participant token
+- `get_all_response_ids(survey_id)` - Get ALL response IDs in the survey (uses export method internally)
+
+**Note**: The LimeSurvey `get_response_ids` API method requires a participant token. Use `get_all_response_ids()` to get all response IDs without needing specific tokens.
 
 ### 👥 Participant Manager (`api.participants`)
 
