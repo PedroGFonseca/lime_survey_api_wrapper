@@ -31,7 +31,25 @@ class SurveyManager(BaseManager):
                 print(f"Survey: {survey['surveyls_title']} (ID: {survey['sid']})")
         """
         params = self._build_params([self._client.session_key], sUsername=username)
-        return self._make_request("list_surveys", params)
+        response = self._make_request("list_surveys", params)
+        
+        # Handle the case where response is an error status instead of a list
+        if isinstance(response, dict) and 'status' in response:
+            # Check for common error responses
+            status = response.get('status', '')
+            if 'No surveys found' in str(status) or 'No permission' in str(status):
+                # This is a normal condition - return empty list
+                return []
+            else:
+                # This is an actual error
+                raise Exception(f"API Error: {status}")
+        
+        # Ensure we always return a list
+        if isinstance(response, list):
+            return response
+        else:
+            # Unexpected response format
+            raise Exception(f"Unexpected response format from list_surveys: {type(response)} - {response}")
     
     @requires_session
     def get_survey_properties(self, survey_id: str, language: Optional[str] = None) -> Dict[str, Any]:

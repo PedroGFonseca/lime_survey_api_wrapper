@@ -57,9 +57,16 @@ def main():
     except Exception:
         print("❌ Environment variables not set")
         
-        # Method 2: Interactive prompt (fallback)
-        print("🔑 Please enter your credentials:")
-        api = LimeSurveyDirectAPI.from_prompt()
+        # Method 2: Try local test config (for development)
+        try:
+            api = LimeSurveyDirectAPI.from_config('test_credentials.ini')
+            print("✅ Using test_credentials.ini")
+        except Exception:
+            print("❌ test_credentials.ini not found or invalid")
+            
+            # Method 3: Interactive prompt (fallback)
+            print("🔑 Please enter your credentials:")
+            api = LimeSurveyDirectAPI.from_prompt()
     
     print("\n📊 Getting survey information...")
     
@@ -67,15 +74,34 @@ def main():
     surveys = api.surveys.list_surveys()
     print(f"Found {len(surveys)} surveys:")
     
+    # Defensive programming: handle edge cases
+    if not isinstance(surveys, list):
+        print(f"❌ Unexpected response type: {type(surveys)}")
+        print(f"Response: {surveys}")
+        return
+    
     for i, survey in enumerate(surveys[:3], 1):  # Show first 3
-        print(f"  {i}. Survey {survey['sid']}: {survey['surveyls_title']}")
-        print(f"     Status: {'Active' if survey['active'] == 'Y' else 'Inactive'}")
+        if not isinstance(survey, dict):
+            print(f"❌ Unexpected survey type: {type(survey)}")
+            continue
+            
+        # Use .get() for safe access to dictionary keys
+        sid = survey.get('sid', 'Unknown ID')
+        title = survey.get('surveyls_title', 'Untitled Survey')
+        active = survey.get('active', 'Unknown')
+        
+        print(f"  {i}. Survey {sid}: {title}")
+        print(f"     Status: {'Active' if active == 'Y' else 'Inactive'}")
     
     if not surveys:
         print("❌ No surveys found. Check your permissions.")
         return
     
-    # 2. Work with the first survey
+    # 2. Work with the first survey - add safety checks
+    if len(surveys) == 0 or not isinstance(surveys[0], dict) or 'sid' not in surveys[0]:
+        print("❌ Cannot analyze survey - invalid survey data format")
+        return
+        
     survey_id = surveys[0]['sid']
     print(f"\n🔍 Analyzing survey {survey_id}...")
     
