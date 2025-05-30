@@ -197,6 +197,23 @@ tokens.txt
 *_auth.txt
 *_login*
 
+# SECRETS DIRECTORY: Never commit actual credentials - SECURITY CRITICAL
+secrets/credentials.ini
+secrets/config.ini
+secrets/*.ini
+secrets/*.json
+secrets/*.txt
+secrets/*.key
+secrets/*.pem
+secrets/*.p12
+secrets/*.pfx
+secrets/*_auth*
+secrets/*_creds*
+secrets/*_login*
+secrets/*_secret*
+secrets/*_token*
+secrets/*_key*
+
 # SURVEY DATA: Never commit actual survey data - SECURITY CRITICAL
 *survey_data*
 *response*
@@ -235,3 +252,46 @@ Thumbs.db
 *.swp
 *.swo
 *~ 
+
+# Local testing files with real credentials (DO NOT COMMIT)
+comprehensive_test_example.py
+validate_mappings_real_data.py
+*_real_data_test.py
+*_live_test.py
+
+# Survey data exports from testing
+survey_*_logic.json
+survey_*_responses.json
+survey_*_data.json
+mapping_validation_report_*.json
+
+# Cached API responses for debugging (should not be committed)
+real_data/
+
+# DEVELOPMENT FILES: Complex analysis and mapping files not part of core API
+analyze_*.py
+cache_*.py
+debug_*.py
+validate_*.py
+investigate_*.py
+comprehensive_*.py
+*_analysis.py
+*_validation.py
+*_mapping*.py
+*_report*.json
+*_analysis*.json
+hybrid_response_mapper.py
+abbreviated_response_mapper.py
+sgqa_response_mapper.py
+survey_mapping_analysis_notebook.py
+test_heading_types.py
+complexity_analysis.py
+setup_dev.py
+
+# Documentation that's not for end users
+CODE_QUALITY_ASSESSMENT.md
+REFACTORING_SUMMARY.md
+TESTING_README.md
+TEST_RESULTS.md
+ANALYSIS.md
+quick_test.py 
