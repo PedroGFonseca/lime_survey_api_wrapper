@@ -192,7 +192,9 @@ passwords.txt
 tokens.txt
 *_token*
 *_key*
-*_auth*
+*_auth.json
+*_auth.ini
+*_auth.txt
 *_login*
 
 # SURVEY DATA: Never commit actual survey data - SECURITY CRITICAL
