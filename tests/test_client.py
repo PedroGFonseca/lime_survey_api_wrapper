@@ -122,7 +122,7 @@ username = testuser
 
         # Test with auto_session=False to avoid extra session calls
         api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
-        api.session_key = "test_session"  # Set session manually for this test
+        api._session_manager._session_key = "test_session"  # Set session via session manager for this test
         
         result = api._make_request("test_method", ["param1", "param2"])
         
@@ -144,7 +144,7 @@ username = testuser
 
         # Test with auto_session=False to avoid extra session calls
         api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
-        api.session_key = "test_session"  # Set session manually for this test
+        api._session_manager._session_key = "test_session"  # Set session via session manager for this test
         
         with pytest.raises(Exception, match="API Error: API Error Message"):
             api._make_request("test_method", ["param1"])
@@ -221,10 +221,10 @@ username = testuser
         
         assert not api.is_connected()
         
-        api.session_key = "test_session"
+        api._session_manager._session_key = "test_session"
         assert api.is_connected()
         
-        api.session_key = None
+        api._session_manager._session_key = None
         assert not api.is_connected()
 
 
