@@ -1,50 +1,229 @@
 """
-LimeSurvey API Analyzer
+LimeSurvey Analyzer - A comprehensive Python package for LimeSurvey API integration.
 
-A comprehensive Python library for interacting with LimeSurvey's RemoteControl API.
-Provides organized access to survey data, responses, and metadata through a clean,
-manager-based architecture.
+This package provides a clean, type-safe interface to LimeSurvey's RemoteControl API
+with a focus on the 4 priority question types: L (Single Choice), M (Multiple Choice), 
+S (Short Text), and R (Ranking).
 
-Features:
-- Intuitive manager-based API organization
-- Robust session management with auto-session and persistent modes  
-- Comprehensive error handling and validation
-- Read-only operations for maximum safety
-- Support for all major LimeSurvey data types
-- Optional graph visualization of conditional logic
-- Extensive test coverage and documentation
+Key Features:
+- Manager-based API organization (surveys, questions, responses, participants)
+- Comprehensive question type validation and modeling system
+- Type-safe data models with full type hints
+- Graceful handling of unsupported question types
+- Session management with auto-session and persistent modes
+- Proper logging and exception handling
+- Secure file-based credential management
 
-Example:
-    from lime_survey_analyzer import LimeSurveyDirectAPI
+Security Best Practices:
+- Credentials stored in configuration files in a secrets/ directory
+- Configuration files are git-ignored to prevent accidental commits
+- HTTPS enforced for production environments
+- Comprehensive error handling and logging
+
+Quick Start:
+    from lime_survey_analyzer import LimeSurveyClient
     
-    # Auto-session mode (perfect for scripts)
-    api = LimeSurveyDirectAPI.from_env()
+    # Initialize client from configuration file
+    api = LimeSurveyClient.from_config('secrets/credentials.ini')
+    
+    # List surveys
     surveys = api.surveys.list_surveys()
     
-    # Persistent session mode (efficient for applications)  
-    api = LimeSurveyDirectAPI.from_env(auto_session=False)
-    api.connect()
-    surveys = api.surveys.list_surveys()
-    responses = api.responses.export_responses(surveys[0]['sid'])
-    api.disconnect()
+    # Get structured questions with validation
+    questions = api.questions.list_questions_structured(survey_id)
+    
+    # Export responses
+    responses = api.responses.export_responses(survey_id)
+
+Configuration File Format:
+    Create a file at secrets/credentials.ini:
+    
+    [limesurvey]
+    url = https://your-limesurvey.com/admin/remotecontrol
+    username = your_username
+    password = your_password
 """
 
-from .client import LimeSurveyDirectAPI
-from .session import SessionManager
-from .managers.survey import SurveyManager
-from .managers.question import QuestionManager
-from .managers.response import ResponseManager
-from .managers.participant import ParticipantManager
+# Import core client
+from .client import LimeSurveyClient
+
+# Import all data models
+from .models import (
+    # Core survey models
+    Survey, QuestionGroup, Question, SubQuestion, Answer, 
+    
+    # Response models
+    Response, ResponseValue, ResponseData, QuestionResponses,
+    
+    # Question hierarchy models
+    QuestionItem, QuestionHierarchy,
+    
+    # Properties and enums
+    QuestionType, VisibilityState, MandatoryState, ResponseStatus,
+    QuestionProperties, AnswerProperties, SubQuestionProperties,
+)
+
+# Import question type system
+from .models.question_types import (
+    # Core question type system
+    QuestionCategory, QuestionTypeDefinition, AdvancedQuestionAttributes,
+    PRIORITY_QUESTION_TYPES, get_priority_question_types,
+    get_question_handler, is_priority_type, validate_question_attributes,
+    
+    # Priority handlers
+    SingleChoiceRadioHandler, MultipleChoiceHandler, 
+    ShortTextHandler, RankingHandler,
+    
+    # Base classes
+    QuestionTypeHandler, NotImplementedHandler,
+    
+    # Complete registry
+    QUESTION_TYPES,
+)
+
+# Import answer codes system for automatic mappings
+from .models.question_answer_codes import (
+    # Core classes
+    AnswerCodeMapping, QuestionAnswerCodes,
+    
+    # Lookup utilities
+    get_answer_codes_for_question_type, get_complete_question_mapping,
+    is_question_type_predefined, list_all_predefined_mappings,
+    
+    # Convenience functions
+    get_type_e_mapping, get_type_a_likert_mapping,
+    
+    # Registry mappings
+    QUESTION_TYPE_TO_ANSWER_CODES, ALTERNATIVE_MAPPINGS,
+)
+
+# Import utilities
+from .utils.logging import setup_logger, get_logger, configure_package_logging
+
+# Import exceptions
+from .exceptions import (
+    # Base exception
+    LimeSurveyError,
+    
+    # Specific exceptions
+    AuthenticationError, ConfigurationError, APIError, SessionError,
+    QuestionValidationError, UnsupportedQuestionTypeError, DataValidationError,
+    SurveyNotFoundError, QuestionNotFoundError, ResponseExportError, VisualizationError,
+    
+    # Utility function
+    handle_api_error,
+)
+
+# Import the original class for backward compatibility
+from .analyser import SurveyAnalysis
+
+# Re-export other important components
+from .types import (
+    SurveyProperties,
+    SurveySummary,
+    QuestionData,
+    OptionData,
+    ResponseMetadata,
+    GroupData
+)
+
+# Import analysis functions
+from . import analysis
+
+# Import types for type checking
+from . import types
+
+# Backward compatibility
+LimeSurveyDirectAPI = LimeSurveyClient
 
 __version__ = "1.0.0"
-__author__ = "LimeSurvey API Team"
-__email__ = "api@limesurvey.org"
 
 __all__ = [
-    "LimeSurveyDirectAPI",
-    "SessionManager",
-    "SurveyManager", 
-    "QuestionManager",
-    "ResponseManager",
-    "ParticipantManager"
+    # Main client
+    "LimeSurveyClient",
+    
+    # Core data models
+    "Survey",
+    "QuestionGroup", 
+    "Question",
+    "SubQuestion",
+    "Answer",
+    "Response",
+    "ResponseValue",
+    "ResponseData", 
+    "QuestionResponses",
+    "QuestionItem",
+    "QuestionHierarchy",
+    
+    # Properties and enums
+    "QuestionType",
+    "VisibilityState",
+    "MandatoryState",
+    "ResponseStatus", 
+    "QuestionProperties",
+    "AnswerProperties",
+    "SubQuestionProperties",
+    
+    # Priority Question Type System
+    "QuestionCategory",
+    "QuestionTypeDefinition", 
+    "AdvancedQuestionAttributes",
+    "PRIORITY_QUESTION_TYPES",
+    "get_priority_question_types",
+    "get_question_handler",
+    "is_priority_type",
+    "validate_question_attributes",
+    
+    # Priority handlers
+    "SingleChoiceRadioHandler",
+    "MultipleChoiceHandler",
+    "ShortTextHandler", 
+    "RankingHandler",
+    
+    # Base classes
+    "QuestionTypeHandler",
+    "NotImplementedHandler",
+    
+    # Complete registry
+    "QUESTION_TYPES",
+    
+    # Answer Codes System for automatic mappings
+    "AnswerCodeMapping",
+    "QuestionAnswerCodes", 
+    "get_answer_codes_for_question_type",
+    "get_complete_question_mapping",
+    "is_question_type_predefined",
+    "list_all_predefined_mappings",
+    "get_type_e_mapping",
+    "get_type_a_likert_mapping",
+    "QUESTION_TYPE_TO_ANSWER_CODES",
+    "ALTERNATIVE_MAPPINGS",
+    
+    # Utilities
+    "setup_logger",
+    "get_logger", 
+    "configure_package_logging",
+    
+    # Exceptions
+    "LimeSurveyError",
+    "AuthenticationError",
+    "ConfigurationError", 
+    "APIError",
+    "SessionError",
+    "QuestionValidationError",
+    "UnsupportedQuestionTypeError",
+    "DataValidationError",
+    "SurveyNotFoundError",
+    "QuestionNotFoundError", 
+    "ResponseExportError",
+    "VisualizationError",
+    
+    # Analysis functionality
+    "SurveyAnalysis",
+    "SurveyProperties", 
+    "SurveySummary",
+    "QuestionData",
+    "OptionData", 
+    "ResponseMetadata",
+    "GroupData"
 ] 

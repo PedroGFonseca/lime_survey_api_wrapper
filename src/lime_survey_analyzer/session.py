@@ -9,6 +9,10 @@ from typing import Optional, Any, List
 from contextlib import contextmanager
 import requests
 
+# Import logging and exceptions
+from .utils.logging import get_logger
+from .exceptions import AuthenticationError, APIError, SessionError
+
 
 class SessionManager:
     """
@@ -34,6 +38,7 @@ class SessionManager:
         self._session_key: Optional[str] = None
         self._request_id = 0
         self._persistent = False
+        self.logger = get_logger(__name__)
     
     @property
     def session_key(self) -> Optional[str]:
@@ -58,7 +63,9 @@ class SessionManager:
             Session key string
             
         Raises:
-            Exception: If authentication fails
+            AuthenticationError: If authentication fails
+            APIError: If the request fails
+            SessionError: If session creation fails
         """
         self._request_id += 1
         
@@ -68,30 +75,41 @@ class SessionManager:
             "id": self._request_id
         }
         
-        if self.debug:
-            print(f"DEBUG: Creating new session with LimeSurvey")
+        self.logger.debug(f"Creating new session with LimeSurvey")
         
-        response = requests.post(
-            self.url,
-            json=payload,
-            headers={'Content-Type': 'application/json'}
-        )
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                self.url,
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            response.raise_for_status()
+        except requests.exceptions.Timeout:
+            raise SessionError("Session creation request timed out")
+        except requests.exceptions.ConnectionError:
+            raise SessionError(f"Connection failed to {self.url}")
+        except requests.exceptions.HTTPError as e:
+            raise SessionError(f"HTTP error during session creation: {e}")
+        except requests.exceptions.RequestException as e:
+            raise SessionError(f"Request failed during session creation: {e}")
         
-        result = response.json()
+        try:
+            result = response.json()
+        except ValueError as e:
+            raise SessionError(f"Invalid JSON response during session creation: {e}")
         
         if 'error' in result and result['error'] is not None:
-            raise Exception(f"Session creation failed: {result['error']}")
+            raise AuthenticationError(f"Session creation failed: {result['error']}")
         
         session_result = result['result']
         
         if isinstance(session_result, dict) and 'status' in session_result:
-            raise Exception(f"Authentication failed: {session_result.get('status', 'Unknown error')}")
+            raise AuthenticationError(f"Authentication failed: {session_result.get('status', 'Unknown error')}")
         
         self._session_key = session_result
         
-        if self.debug:
-            print(f"DEBUG: Session created: {session_result[:10]}...")
+        self.logger.debug(f"Session created: {session_result[:10]}...")
             
         return session_result
     
@@ -113,20 +131,19 @@ class SessionManager:
                 "id": self._request_id
             }
             
-            if self.debug:
-                print(f"DEBUG: Releasing session: {self._session_key[:10]}...")
+            self.logger.debug(f"Releasing session: {self._session_key[:10]}...")
             
             response = requests.post(
                 self.url,
                 json=payload,
-                headers={'Content-Type': 'application/json'}
+                headers={'Content-Type': 'application/json'},
+                timeout=10  # Shorter timeout for cleanup
             )
             response.raise_for_status()
             
-        except Exception:
+        except Exception as e:
             # Ignore errors when releasing - server might have cleaned up already
-            if self.debug:
-                print("DEBUG: Session release request failed (server may have cleaned up)")
+            self.logger.debug(f"Session release request failed (server may have cleaned up): {e}")
         finally:
             self._session_key = None
             self._persistent = False
@@ -176,13 +193,16 @@ class SessionManager:
             
         Returns:
             Parameter list with session key injected
+            
+        Raises:
+            SessionError: If no active session is available
         """
         final_params = params.copy()
         
         # Replace None session key placeholder with actual session key
         if len(final_params) > 0 and final_params[0] is None:
             if not self._session_key:
-                raise Exception("No active session key available")
+                raise SessionError("No active session key available")
             final_params[0] = self._session_key
             
         return final_params 

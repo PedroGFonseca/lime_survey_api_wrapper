@@ -7,15 +7,15 @@ through dedicated manager classes.
 
 Features:
 - Read-only operations for maximum safety
-- Secure credential handling (environment variables, config files)
+- Secure credential handling via configuration files
 - Automatic session management for seamless usage
 - Comprehensive type hints and documentation
 - Debug logging support
 - Modular manager-based architecture following SOLID principles
 
 Security Best Practices:
-- Never store credentials in code
-- Use environment variables or secure config files
+- Credentials stored in secure configuration files only
+- Configuration files should be in a secrets/ directory that is git-ignored
 - Enable HTTPS for production use
 - Regularly rotate API credentials
 - Monitor API access logs
@@ -23,10 +23,10 @@ Security Best Practices:
 Example:
     Simple usage:
     
-    from lime_survey_analyzer import LimeSurveyDirectAPI
+    from lime_survey_analyzer import LimeSurveyClient
     
-    # Create client and start using immediately
-    api = LimeSurveyDirectAPI.from_env()
+    # Create client from configuration file
+    api = LimeSurveyClient.from_config('secrets/credentials.ini')
     
     # Survey operations
     surveys = api.surveys.list_surveys()
@@ -45,12 +45,9 @@ Example:
 Author: Generated for LimeSurvey API integration
 """
 
-import os
-import json
 import configparser
-import getpass
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import List, Any, Optional
 import requests
 
 from .session import SessionManager
@@ -59,8 +56,14 @@ from .managers.question import QuestionManager
 from .managers.response import ResponseManager
 from .managers.participant import ParticipantManager
 
+# Import logging
+from .utils.logging import get_logger, configure_package_logging
 
-class LimeSurveyDirectAPI:
+# Import exceptions
+from .exceptions import ConfigurationError, AuthenticationError, APIError, handle_api_error
+
+
+class LimeSurveyClient:
     """
     Main LimeSurvey API client with organized manager-based access.
     
@@ -69,6 +72,8 @@ class LimeSurveyDirectAPI:
     - questions: Question and group operations  
     - responses: Response data and statistics
     - participants: Participant management
+    
+    Authentication is handled via configuration files stored in a secure location.
     
     Session Management Modes:
     1. Auto-session (default): Automatically manages sessions per request - perfect for scripts
@@ -79,6 +84,8 @@ class LimeSurveyDirectAPI:
                  auto_session: bool = True):
         """
         Initialize the LimeSurvey API client.
+        
+        Note: Direct initialization is discouraged. Use LimeSurveyClient.from_config() instead.
         
         Args:
             url: LimeSurvey RemoteControl API URL
@@ -96,9 +103,13 @@ class LimeSurveyDirectAPI:
         self.auto_session = auto_session
         self._request_id = 0
         
+        # Setup logging
+        configure_package_logging(debug=debug)
+        self.logger = get_logger(__name__)
+        
         # Validate URL
         if not url.startswith(('http://', 'https://')):
-            raise ValueError("URL must start with http:// or https://")
+            raise ConfigurationError("URL must start with http:// or https://")
         
         # Security warning for non-HTTPS URLs
         if url.startswith('http://') and not url.startswith('http://localhost'):
@@ -110,13 +121,15 @@ class LimeSurveyDirectAPI:
             )
         
         # Initialize session manager
-        self._session_manager = SessionManager(url, username, password, debug)
+        self._session_manager = SessionManager(self.url, self.username, self.password, self.debug)
         
         # Initialize managers
         self.surveys = SurveyManager(self)
         self.questions = QuestionManager(self)
         self.responses = ResponseManager(self)
         self.participants = ParticipantManager(self)
+        
+        self.logger.debug(f"LimeSurveyClient initialized for {url}")
     
     @property
     def session_key(self) -> Optional[str]:
@@ -129,43 +142,12 @@ class LimeSurveyDirectAPI:
         return self._session_manager.is_persistent
         
     @classmethod
-    def from_env(cls, debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
-        """
-        Create API client from environment variables.
-        
-        Required environment variables:
-        - LIMESURVEY_URL: Full URL to RemoteControl endpoint
-        - LIMESURVEY_USERNAME: LimeSurvey username  
-        - LIMESURVEY_PASSWORD: LimeSurvey password
-        
-        Args:
-            debug: Enable debug logging
-            auto_session: Enable automatic session management (default: True)
-            
-        Returns:
-            Configured LimeSurveyDirectAPI instance
-            
-        Raises:
-            ValueError: If required environment variables are missing
-        """
-        url = os.getenv('LIMESURVEY_URL')
-        username = os.getenv('LIMESURVEY_USERNAME')  
-        password = os.getenv('LIMESURVEY_PASSWORD')
-        
-        if not all([url, username, password]):
-            missing = [name for name, value in [
-                ('LIMESURVEY_URL', url),
-                ('LIMESURVEY_USERNAME', username), 
-                ('LIMESURVEY_PASSWORD', password)
-            ] if not value]
-            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
-        
-        return cls(url, username, password, debug, auto_session)
-    
-    @classmethod
-    def from_config(cls, config_path: str = 'credentials.ini', debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
+    def from_config(cls, config_path: str = 'secrets/credentials.ini', debug: bool = False, 
+                   auto_session: bool = True) -> 'LimeSurveyClient':
         """
         Create API client from configuration file.
+        
+        This is the recommended way to create a LimeSurveyClient instance.
         
         Expected config file format:
         [limesurvey]
@@ -174,33 +156,58 @@ class LimeSurveyDirectAPI:
         password = your_password
         
         Args:
-            config_path: Path to configuration file
+            config_path: Path to configuration file (default: secrets/credentials.ini)
             debug: Enable debug logging  
             auto_session: Enable automatic session management (default: True)
             
         Returns:
-            Configured LimeSurveyDirectAPI instance
+            Configured LimeSurveyClient instance
             
         Raises:
-            FileNotFoundError: If config file doesn't exist
-            ValueError: If required config values are missing
+            ConfigurationError: If config file doesn't exist or is invalid
+            
+        Example:
+            # Using default path
+            api = LimeSurveyClient.from_config()
+            
+            # Using custom path
+            api = LimeSurveyClient.from_config('path/to/my/config.ini')
+            
+            # With debug logging
+            api = LimeSurveyClient.from_config(debug=True)
         """
         config_file = Path(config_path)
         if not config_file.exists():
-            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+            raise ConfigurationError(
+                f"Configuration file not found: {config_path}\n"
+                f"Please create a configuration file with the following format:\n"
+                f"[limesurvey]\n"
+                f"url = https://your-limesurvey.com/admin/remotecontrol\n"
+                f"username = your_username\n"
+                f"password = your_password"
+            )
             
         config = configparser.ConfigParser()
-        config.read(config_file)
+        try:
+            config.read(config_file)
+        except Exception as e:
+            raise ConfigurationError(f"Failed to read configuration file: {e}")
         
         if 'limesurvey' not in config:
-            raise ValueError("Configuration file must contain [limesurvey] section")
+            raise ConfigurationError(
+                f"Configuration file must contain [limesurvey] section. "
+                f"Found sections: {list(config.sections())}"
+            )
             
         section = config['limesurvey']
         required_keys = ['url', 'username', 'password']
         missing_keys = [key for key in required_keys if key not in section]
         
         if missing_keys:
-            raise ValueError(f"Missing required configuration keys: {', '.join(missing_keys)}")
+            raise ConfigurationError(
+                f"Missing required configuration keys: {', '.join(missing_keys)}\n"
+                f"Required keys: {', '.join(required_keys)}"
+            )
             
         return cls(
             section['url'], 
@@ -210,25 +217,6 @@ class LimeSurveyDirectAPI:
             auto_session
         )
     
-    @classmethod  
-    def from_prompt(cls, debug: bool = False, auto_session: bool = True) -> 'LimeSurveyDirectAPI':
-        """
-        Create API client with interactive credential prompts.
-        
-        Args:
-            debug: Enable debug logging
-            auto_session: Enable automatic session management (default: True)
-            
-        Returns:
-            Configured LimeSurveyDirectAPI instance
-        """
-        print("Enter LimeSurvey credentials:")
-        url = input("URL (e.g., https://survey.example.com/admin/remotecontrol): ").strip()
-        username = input("Username: ").strip()
-        password = getpass.getpass("Password: ").strip()
-        
-        return cls(url, username, password, debug, auto_session)
-    
     def connect(self):
         """
         Establish a persistent session for multiple API calls.
@@ -237,7 +225,7 @@ class LimeSurveyDirectAPI:
         Call disconnect() when done to clean up the session.
         
         Example:
-            api = LimeSurveyDirectAPI.from_env(auto_session=False)
+            api = LimeSurveyClient.from_config(auto_session=False)
             api.connect()
             
             # Make multiple calls efficiently
@@ -302,6 +290,10 @@ class LimeSurveyDirectAPI:
             
         Returns:
             API response data
+            
+        Raises:
+            APIError: If the API request fails or returns an error
+            AuthenticationError: If authentication fails
         """
         self._request_id += 1
         
@@ -312,21 +304,35 @@ class LimeSurveyDirectAPI:
         }
         
         if self.debug:
-            print(f"DEBUG: Making request to {method} with {len(params)} parameters")
+            self.logger.debug(f"Making request to {method} with {len(params)} parameters")
             session_key = params[0] if params else None
-            print(f"DEBUG: Session key: {session_key[:10] if session_key else 'None'}...")
+            self.logger.debug(f"Session key: {session_key[:10] if session_key else 'None'}...")
         
-        response = requests.post(
-            self.url,
-            json=payload,
-            headers={'Content-Type': 'application/json'}
-        )
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                self.url,
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30  # Add timeout for better error handling
+            )
+            response.raise_for_status()
+        except requests.exceptions.Timeout:
+            raise APIError(f"Request to {method} timed out", api_method=method)
+        except requests.exceptions.ConnectionError:
+            raise APIError(f"Connection failed to {self.url}", api_method=method)
+        except requests.exceptions.HTTPError as e:
+            raise APIError(f"HTTP error {e.response.status_code}: {e}", api_method=method)
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"Request failed: {e}", api_method=method)
         
-        result = response.json()
+        try:
+            result = response.json()
+        except ValueError as e:
+            raise APIError(f"Invalid JSON response: {e}", api_method=method)
         
+        # Handle API-level errors
         if 'error' in result and result['error'] is not None:
-            raise Exception(f"API Error: {result['error']}")
+            handle_api_error(result, method)
         
         return result['result']
     
@@ -354,4 +360,8 @@ class LimeSurveyDirectAPI:
     
     def _release_session_key(self) -> None:
         """Legacy method for backward compatibility."""
-        self._session_manager.release_session() 
+        self._session_manager.release_session()
+
+
+# Backward compatibility alias
+LimeSurveyDirectAPI = LimeSurveyClient 

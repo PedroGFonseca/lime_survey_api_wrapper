@@ -5,8 +5,88 @@ import pytest
 import warnings
 from unittest.mock import patch, MagicMock
 
-from lime_survey_analyzer import LimeSurveyDirectAPI
+from lime_survey_analyzer import LimeSurveyClient
 from lime_survey_analyzer.managers.base import requires_session
+from lime_survey_analyzer.exceptions import ConfigurationError
+
+
+class TestLimeSurveyClient:
+    """Test the main LimeSurveyClient class."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.api = LimeSurveyClient(
+            url='https://test.com/admin/remotecontrol',
+            username='testuser',
+            password='testpass'
+        )
+    
+    def test_initialization(self):
+        """Test client initialization."""
+        assert self.api.url == 'https://test.com/admin/remotecontrol'
+        assert self.api.username == 'testuser'
+        assert self.api.password == 'testpass'
+        assert self.api.auto_session is True  # Default
+        assert self.api.debug is False  # Default
+    
+    def test_initialization_with_options(self):
+        """Test client initialization with custom options."""
+        api = LimeSurveyClient(
+            url='https://test.com/admin/remotecontrol',
+            username='testuser',
+            password='testpass',
+            auto_session=False,
+            debug=True
+        )
+        assert api.auto_session is False
+        assert api.debug is True
+    
+    def test_manager_access(self):
+        """Test that managers are accessible."""
+        assert hasattr(self.api, 'surveys')
+        assert hasattr(self.api, 'questions')
+        assert hasattr(self.api, 'responses')
+        assert hasattr(self.api, 'participants')
+    
+    @patch('lime_survey_analyzer.client.SessionManager')
+    def test_connect_disconnect(self, mock_session_manager_class):
+        """Test connection and disconnection."""
+        # Create a mock session manager instance
+        mock_session_manager = MagicMock()
+        mock_session_manager_class.return_value = mock_session_manager
+        
+        # Create a new API instance with the mocked session manager
+        api = LimeSurveyClient("https://test.com/admin/remotecontrol", "user", "pass")
+        
+        # Test connection
+        api.connect()
+        mock_session_manager.connect_persistent.assert_called_once()
+        
+        # Test disconnection
+        api.disconnect()
+        mock_session_manager.disconnect_persistent.assert_called_once()
+    
+    def test_is_connected(self):
+        """Test connection status checking."""
+        # Initially not connected
+        assert not self.api.is_connected()
+        
+        # Mock connection by setting session key via session manager
+        self.api._session_manager._session_key = "test_session_key"
+        assert self.api.is_connected()
+        
+        # Mock disconnection
+        self.api._session_manager._session_key = None
+        assert not self.api.is_connected()
+    
+    def test_session_property(self):
+        """Test session property access."""
+        # Test session_key property
+        assert self.api.session_key is None
+        
+        # Mock session
+        self.api._session_manager._session_key = "test_session"
+        assert self.api.session_key == "test_session"
 
 
 class TestLimeSurveyDirectAPI:
@@ -14,7 +94,7 @@ class TestLimeSurveyDirectAPI:
 
     def test_init_valid_url(self):
         """Test initialization with valid URL."""
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass")
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass")
         assert api.url == "https://example.com/admin/remotecontrol"
         assert api.username == "user"
         assert api._password == "pass"
@@ -23,41 +103,22 @@ class TestLimeSurveyDirectAPI:
 
     def test_init_invalid_url(self):
         """Test initialization with invalid URL."""
-        with pytest.raises(ValueError, match="URL must start with http:// or https://"):
-            LimeSurveyDirectAPI("invalid-url", "user", "pass")
+        with pytest.raises(ConfigurationError, match="URL must start with http"):
+            LimeSurveyClient("invalid-url", "user", "pass")
 
     def test_init_http_warning(self):
         """Test warning for HTTP URLs."""
         with pytest.warns(UserWarning, match="Using HTTP instead of HTTPS"):
-            LimeSurveyDirectAPI("http://example.com/admin/remotecontrol", "user", "pass")
+            LimeSurveyClient("http://example.com/admin/remotecontrol", "user", "pass")
 
     def test_init_localhost_no_warning(self):
         """Test no warning for localhost HTTP URLs."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            LimeSurveyDirectAPI("http://localhost/admin/remotecontrol", "user", "pass")
+            LimeSurveyClient("http://localhost/admin/remotecontrol", "user", "pass")
             # Filter for only our specific warning
             http_warnings = [warning for warning in w if "HTTP instead of HTTPS" in str(warning.message)]
             assert len(http_warnings) == 0
-
-    def test_from_env_success(self):
-        """Test creating client from environment variables."""
-        env_vars = {
-            'LIMESURVEY_URL': 'https://example.com/admin/remotecontrol',
-            'LIMESURVEY_USERNAME': 'testuser',
-            'LIMESURVEY_PASSWORD': 'testpass'
-        }
-        with patch.dict(os.environ, env_vars):
-            api = LimeSurveyDirectAPI.from_env()
-            assert api.url == 'https://example.com/admin/remotecontrol'
-            assert api.username == 'testuser'
-            assert api._password == 'testpass'
-
-    def test_from_env_missing_vars(self):
-        """Test error when environment variables are missing."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="Missing required environment variables"):
-                LimeSurveyDirectAPI.from_env()
 
     def test_from_config_success(self, tmp_path):
         """Test creating client from config file."""
@@ -69,23 +130,23 @@ username = testuser
 password = testpass
 """)
         
-        api = LimeSurveyDirectAPI.from_config(config_file)
+        api = LimeSurveyClient.from_config(config_file)
         assert api.url == 'https://example.com/admin/remotecontrol'
         assert api.username == 'testuser'
         assert api._password == 'testpass'
 
     def test_from_config_missing_file(self):
         """Test error when config file doesn't exist."""
-        with pytest.raises(FileNotFoundError):
-            LimeSurveyDirectAPI.from_config("nonexistent.ini")
+        with pytest.raises(ConfigurationError):
+            LimeSurveyClient.from_config("nonexistent.ini")
 
     def test_from_config_missing_section(self, tmp_path):
         """Test error when config section is missing."""
         config_file = tmp_path / "test_config.ini"
         config_file.write_text("[other_section]\nkey = value\n")
         
-        with pytest.raises(ValueError, match="Configuration file must contain \\[limesurvey\\] section"):
-            LimeSurveyDirectAPI.from_config(config_file)
+        with pytest.raises(ConfigurationError, match="must contain \\[limesurvey\\] section"):
+            LimeSurveyClient.from_config(config_file)
 
     def test_from_config_missing_keys(self, tmp_path):
         """Test error when config keys are missing."""
@@ -97,20 +158,8 @@ username = testuser
 # password missing
 """)
         
-        with pytest.raises(ValueError, match="Missing required configuration keys"):
-            LimeSurveyDirectAPI.from_config(config_file)
-
-    @patch('builtins.input')
-    @patch('getpass.getpass')
-    def test_from_prompt(self, mock_getpass, mock_input):
-        """Test creating client from prompts."""
-        mock_input.side_effect = ['https://example.com/admin/remotecontrol', 'testuser']
-        mock_getpass.return_value = 'testpass'
-        
-        api = LimeSurveyDirectAPI.from_prompt()
-        assert api.url == 'https://example.com/admin/remotecontrol'
-        assert api.username == 'testuser'
-        assert api._password == 'testpass'
+        with pytest.raises(ConfigurationError, match="Missing required configuration keys"):
+            LimeSurveyClient.from_config(config_file)
 
     @patch('requests.post')
     def test_make_request_success(self, mock_post):
@@ -121,7 +170,7 @@ username = testuser
         mock_post.return_value = mock_response
 
         # Test with auto_session=False to avoid extra session calls
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
         api._session_manager._session_key = "test_session"  # Set session via session manager for this test
         
         result = api._make_request("test_method", ["param1", "param2"])
@@ -131,7 +180,8 @@ username = testuser
         mock_post.assert_called_once_with(
             'https://example.com/admin/remotecontrol',
             json={'method': 'test_method', 'params': ['param1', 'param2'], 'id': 1},
-            headers={'Content-Type': 'application/json'}
+            headers={'Content-Type': 'application/json'},
+            timeout=30
         )
 
     @patch('requests.post')
@@ -143,10 +193,10 @@ username = testuser
         mock_post.return_value = mock_response
 
         # Test with auto_session=False to avoid extra session calls
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
         api._session_manager._session_key = "test_session"  # Set session via session manager for this test
         
-        with pytest.raises(Exception, match="API Error: API Error Message"):
+        with pytest.raises(Exception, match="API Error in test_method: API Error Message"):
             api._make_request("test_method", ["param1"])
 
     @patch('requests.post')
@@ -167,7 +217,7 @@ username = testuser
         # Return different responses for different calls
         mock_post.side_effect = [session_response, api_response, release_response]
 
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=True)
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass", auto_session=True)
         result = api._make_request("test_method", ["param1"])
         
         assert result == 'test_result'
@@ -176,7 +226,7 @@ username = testuser
 
     def test_build_params(self):
         """Test parameter building with optional parameters."""
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass")
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass")
         
         # Test with no optional params
         result = api._build_params(["base1", "base2"])
@@ -200,7 +250,7 @@ username = testuser
         
         mock_post.side_effect = [session_response, release_response]
 
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
         
         # Test connect
         assert not api.is_connected()
@@ -217,7 +267,7 @@ username = testuser
 
     def test_is_connected(self):
         """Test is_connected method."""
-        api = LimeSurveyDirectAPI("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
+        api = LimeSurveyClient("https://example.com/admin/remotecontrol", "user", "pass", auto_session=False)
         
         assert not api.is_connected()
         

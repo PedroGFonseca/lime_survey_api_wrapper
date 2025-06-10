@@ -24,6 +24,9 @@ class Question:
     """
     Represents a main question in LimeSurvey.
     Main questions have parent_qid = 0 and can contain sub-questions and answers.
+    
+    Automatically provides human-readable answer mappings for question types that
+    normally return "No available answer options" from the LimeSurvey API.
     """
     
     # From QuestionProperties
@@ -84,6 +87,21 @@ class Question:
     def has_other_option(self) -> bool:
         """Returns True if question allows 'Other' option"""
         return self.properties.other_option
+    
+    @property
+    def has_predefined_options(self) -> bool:
+        """
+        Returns True if this question type has predefined answer options
+        (like Type E: Increase/Same/Decrease).
+        """
+        from .question_answer_codes import is_question_type_predefined
+        return is_question_type_predefined(self.properties.question_type.value)
+    
+    @property
+    def is_array_question(self) -> bool:
+        """Returns True if this is an array/matrix question type."""
+        array_types = ['A', 'B', 'C', 'E', 'F', 'H', '1', ':', ';']
+        return self.properties.question_type.value in array_types
         
     def get_answer_by_code(self, code: str) -> Optional['Answer']:
         """Find answer by its code"""
@@ -98,6 +116,117 @@ class Question:
             if sq.properties.question_code == code:
                 return sq
         return None
+    
+    def get_answer_text_for_code(self, code: str) -> str:
+        """
+        Get human-readable text for an answer code.
+        
+        Args:
+            code: Answer code (e.g., 'I', 'S', 'D' for Type E questions)
+            
+        Returns:
+            Human-readable text (e.g., 'Increase', 'Same', 'Decrease')
+            
+        Example:
+            question = api.questions.get_question_structured('291558', '28')
+            text = question.get_answer_text_for_code('I')  # Returns 'Increase'
+        """
+        answer = self.get_answer_by_code(code)
+        if answer:
+            return answer.properties.answer_text
+        
+        # Fallback to predefined mapping if answer not found
+        if self.has_predefined_options:
+            from .question_answer_codes import get_answer_codes_for_question_type
+            mapping = get_answer_codes_for_question_type(self.properties.question_type.value)
+            if mapping:
+                return mapping.get_text_for_code(code)
+        
+        return f"Unknown code: {code}"
+    
+    def get_answer_codes_mapping(self) -> Dict[str, str]:
+        """
+        Get complete mapping of answer codes to human-readable text.
+        
+        Returns:
+            Dictionary mapping codes to text (e.g., {'I': 'Increase', 'S': 'Same', 'D': 'Decrease'})
+            
+        Example:
+            question = api.questions.get_question_structured('291558', '28')
+            mapping = question.get_answer_codes_mapping()
+            # Returns: {'I': 'Increase', 'S': 'Same', 'D': 'Decrease'}
+        """
+        mapping = {}
+        
+        # First, get mappings from actual Answer objects
+        for answer in self.answers:
+            mapping[answer.properties.code] = answer.properties.answer_text
+        
+        # If no answers but has predefined options, use those
+        if not mapping and self.has_predefined_options:
+            from .question_answer_codes import get_answer_codes_for_question_type
+            predefined_mapping = get_answer_codes_for_question_type(self.properties.question_type.value)
+            if predefined_mapping:
+                mapping = predefined_mapping.code_to_text
+        
+        return mapping
+    
+    def get_sub_questions_mapping(self) -> Dict[str, str]:
+        """
+        Get mapping of sub-question codes to human-readable text.
+        
+        Returns:
+            Dictionary mapping sub-question codes to text
+            
+        Example:
+            question = api.questions.get_question_structured('291558', '28')
+            sub_mapping = question.get_sub_questions_mapping()
+            # Returns: {'29': 'Age of candidate', '30': 'Gender of candidate', ...}
+        """
+        return {sq.properties.question_code: sq.properties.question_text 
+                for sq in self.sub_questions}
+    
+    def get_complete_response_mapping(self) -> Dict[str, Any]:
+        """
+        Get complete mapping for interpreting response data.
+        
+        Returns:
+            Dictionary with answer_options, sub_questions, and response format info
+            
+        Example:
+            question = api.questions.get_question_structured('291558', '28')
+            mapping = question.get_complete_response_mapping()
+            # Returns: {
+            #   'answer_options': {'I': 'Increase', 'S': 'Same', 'D': 'Decrease'},
+            #   'sub_questions': {'29': 'Age of candidate', ...},
+            #   'response_format': 'array',
+            #   'example_response': '29[I]' -> 'Age of candidate: Increase'
+            # }
+        """
+        mapping = {
+            'question_id': self.qid,
+            'question_type': self.properties.question_type.value,
+            'question_text': self.properties.question_text,
+            'answer_options': self.get_answer_codes_mapping(),
+            'sub_questions': self.get_sub_questions_mapping(),
+            'response_format': 'array' if self.has_sub_questions else 'single',
+            'is_mandatory': self.is_mandatory,
+            'allows_other': self.has_other_option
+        }
+        
+        # Add example response interpretation
+        if self.has_sub_questions and mapping['answer_options']:
+            first_sub = list(mapping['sub_questions'].keys())[0] if mapping['sub_questions'] else 'SQ1'
+            first_answer = list(mapping['answer_options'].keys())[0] if mapping['answer_options'] else 'A1'
+            sub_text = mapping['sub_questions'].get(first_sub, 'Sub-question')
+            answer_text = mapping['answer_options'].get(first_answer, 'Answer')
+            mapping['example_response'] = f"'{first_sub}[{first_answer}]' → '{sub_text}: {answer_text}'"
+        elif mapping['answer_options']:
+            first_answer = list(mapping['answer_options'].keys())[0]
+            answer_text = mapping['answer_options'][first_answer]
+            mapping['example_response'] = f"'{first_answer}' → '{answer_text}'"
+        
+        return mapping
         
     def add_answer(self, answer: 'Answer') -> None:
         """Add an answer option to this question"""

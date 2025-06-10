@@ -214,21 +214,95 @@ secrets/*_secret*
 secrets/*_token*
 secrets/*_key*
 
-# SURVEY DATA: Never commit actual survey data - SECURITY CRITICAL
+# SURVEY DATA PROTECTION: Never commit actual survey data - PRIVACY CRITICAL
+# ========================================================================
+
+# Real survey data patterns (by survey ID)
+*survey_291558*
+*291558*
+survey_[0-9]*/
+survey_[0-9][0-9][0-9][0-9][0-9][0-9]/
+*_survey_[0-9]*
+*_[0-9][0-9][0-9][0-9][0-9][0-9]*
+
+# Survey response and analysis files
 *survey_data*
-*response*
+*_survey_data*
+*survey_responses*
+*_survey_responses*
 *responses*
+*_responses*
 *ground_truth*
-*statistics*
-*_censored*
+*_ground_truth*
+*participant*
+*_participant*
 survey_*.csv
 survey_*.json
+survey_*.xlsx
+survey_*.xml
 response_*.csv
 response_*.json
-*_survey_*.csv
-*_survey_*.json
+response_*.xlsx
 participant_*.csv
 participant_*.json
+analysis_*.csv
+analysis_*.json
+results_*.csv
+results_*.json
+
+# LimeSurvey export files
+*_responses_export*
+*_structure_export*
+*_participants_export*
+*_statistics_export*
+lime_survey_export_*
+limesurvey_export_*
+export_survey_*
+
+# Cached survey data and API responses
+survey_cache/
+response_cache/
+api_cache/
+.survey_cache/
+.response_cache/
+.api_cache/
+*_cache_[0-9]*
+cache_survey_[0-9]*/
+cached_responses_*
+cached_survey_*
+
+# Real data test files (local development only)
+*_real_data*
+*_live_data*
+*_production_data*
+*_real_survey*
+*_live_survey*
+test_real_*
+test_live_*
+*_real_test*
+*_live_test*
+real_data_*
+live_data_*
+
+# Analysis outputs with potentially sensitive data
+*_analysis_output*
+*_analysis_results*
+*_statistical_analysis*
+*_cross_analysis*
+*_survey_analysis*
+human_readable_*
+advanced_analysis.*
+comprehensive_analysis.*
+
+# Personal/sensitive notes and documentation
+*_personal_notes*
+*_sensitive*
+*_confidential*
+*_private*
+*_internal*
+*CONFIDENTIAL*
+*SENSITIVE*
+*PRIVATE*
 
 # Development and backup files
 *_original.*
@@ -294,4 +368,19 @@ REFACTORING_SUMMARY.md
 TESTING_README.md
 TEST_RESULTS.md
 ANALYSIS.md
-quick_test.py 
+quick_test.py
+
+# Question options cache
+.question_cache/
+*_question_cache/
+question_cache_*/
+*.cache.json
+*.cache.pickle 
+# Test results (local only)
+test_results_local/
+
+# Survey data cache
+cache_survey_data/
+
+# Obsolete/deprecated code files
+obs/

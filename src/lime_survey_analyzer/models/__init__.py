@@ -48,6 +48,27 @@ from .question_types import (
     QUESTION_TYPES,
 )
 
+# Answer Codes System for predefined question types
+from .question_answer_codes import (
+    # Core classes
+    AnswerCodeMapping,
+    QuestionAnswerCodes,
+    
+    # Lookup utilities
+    get_answer_codes_for_question_type,
+    get_complete_question_mapping,
+    is_question_type_predefined,
+    list_all_predefined_mappings,
+    
+    # Convenience functions
+    get_type_e_mapping,
+    get_type_a_likert_mapping,
+    
+    # Registry mappings
+    QUESTION_TYPE_TO_ANSWER_CODES,
+    ALTERNATIVE_MAPPINGS,
+)
+
 # Export all the main classes for easy importing
 __all__ = [
     # Core models
@@ -94,4 +115,16 @@ __all__ = [
     
     # Complete registry
     "QUESTION_TYPES",
+    
+    # Answer Codes System
+    "AnswerCodeMapping",
+    "QuestionAnswerCodes",
+    "get_answer_codes_for_question_type",
+    "get_complete_question_mapping",
+    "is_question_type_predefined",
+    "list_all_predefined_mappings",
+    "get_type_e_mapping",
+    "get_type_a_likert_mapping",
+    "QUESTION_TYPE_TO_ANSWER_CODES",
+    "ALTERNATIVE_MAPPINGS",
 ] 
