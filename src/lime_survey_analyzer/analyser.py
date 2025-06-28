@@ -20,17 +20,16 @@ if TYPE_CHECKING:
         ProcessedResponse, QuestionStatistics, AnalysisConfig
     )
 
-# Initialize cache manager
-cache_manager = get_cache_manager()
+# Cache manager will be initialized with verbose setting when needed
 
-@cached_api_call(cache_manager)
-def _get_questions(api: 'LimeSurveyClient', survey_id: str) -> pd.DataFrame:
+def _get_questions(api: 'LimeSurveyClient', survey_id: str, verbose: bool = False) -> pd.DataFrame:
     """
     Get questions for a survey.
     
     Args:
         api: LimeSurvey API client
         survey_id: Survey ID
+        verbose: Whether to show cache messages
         
     Returns:
         DataFrame containing survey questions with proper string types
@@ -41,7 +40,17 @@ def _get_questions(api: 'LimeSurveyClient', survey_id: str) -> pd.DataFrame:
     if not survey_id:
         raise ValueError("survey_id cannot be empty")
     
+    # Get cache manager with verbose setting
+    cache_manager = get_cache_manager(verbose)
+    
+    # Try cache first
+    cached_result = cache_manager.get_cached('_get_questions', survey_id)
+    if cached_result is not None:
+        return cached_result
+    
     # get the questions 
+    if verbose:
+        print("🌐 API CALL: _get_questions (not cached)")
     questions_raw = api.questions.list_questions(survey_id)
     
     if not questions_raw:
@@ -61,10 +70,12 @@ def _get_questions(api: 'LimeSurveyClient', survey_id: str) -> pd.DataFrame:
     questions['qid'] = questions['qid'].astype(str)
     questions['parent_qid'] = questions['parent_qid'].astype(str)
     
+    # Store in cache
+    cache_manager.set_cached(questions, '_get_questions', survey_id)
+    
     return questions
 
-@cached_api_call(cache_manager)
-def _get_question_options(api: 'LimeSurveyClient', survey_id: str, question_id: str) -> Union[str, Dict[str, Any]]:
+def _get_question_options(api: 'LimeSurveyClient', survey_id: str, question_id: str, verbose: bool = False) -> Union[str, Dict[str, Any]]:
     """
     Get options for a particular question, using cache if available.
     
@@ -72,20 +83,31 @@ def _get_question_options(api: 'LimeSurveyClient', survey_id: str, question_id: 
         api: LimeSurvey API client
         survey_id: Survey ID
         question_id: Question ID
+        verbose: Whether to show cache messages
         
     Returns:
         Question options data or "No available answer options" string
     """
-    # Cached: permanent question option data
+    # Get cache manager with verbose setting
+    cache_manager = get_cache_manager(verbose)
     
-    # If not in cache, get from API
+    # Try cache first
+    cached_result = cache_manager.get_cached('_get_question_options', survey_id, question_id)
+    if cached_result is not None:
+        return cached_result
+    
+    # Cache miss - call API
+    if verbose:
+        print("🌐 API CALL: _get_question_options (not cached)")
     props = api.questions.get_question_properties(survey_id, question_id)
     option_order = props['answeroptions']
+    
+    # Store in cache
+    cache_manager.set_cached(option_order, '_get_question_options', survey_id, question_id)
         
     return option_order 
 
-@cached_api_call(cache_manager)
-def _get_raw_options_data(api: 'LimeSurveyClient', survey_id: str, questions: pd.DataFrame) -> Dict[str, Union[str, Dict[str, Any]]]:
+def _get_raw_options_data(api: 'LimeSurveyClient', survey_id: str, questions: pd.DataFrame, verbose: bool = False) -> Dict[str, Union[str, Dict[str, Any]]]:
     """
     Loops through the questions dataframe to get options data for each question.
     
@@ -93,23 +115,44 @@ def _get_raw_options_data(api: 'LimeSurveyClient', survey_id: str, questions: pd
         api: LimeSurvey API client
         survey_id: Survey ID
         questions: DataFrame of questions
+        verbose: Whether to show progress bar and cache messages
         
     Returns:
         Dictionary mapping question IDs to their options data
     """
-    # Cached: this is the slowest part - lots of API calls
+    # Get cache manager with verbose setting
+    cache_manager = get_cache_manager(verbose)
+    
+    # Try cache first
+    cached_result = cache_manager.get_cached('_get_raw_options_data', survey_id, len(questions))
+    if cached_result is not None:
+        return cached_result
+    
+    # Cache miss - process questions
+    if verbose:
+        print("🌐 API CALL: _get_raw_options_data (not cached)")
+    
     raw_options_data = {}
-    for qid in tqdm(questions['id'], desc="Loading question options"):
-        raw_options_data[qid] = _get_question_options(api, survey_id, qid)
+    question_ids = questions['id']
+    
+    if verbose:
+        question_ids = tqdm(question_ids, desc="Loading question options")
+        
+    for qid in question_ids:
+        raw_options_data[qid] = _get_question_options(api, survey_id, qid, verbose)
+    
+    # Store in cache
+    cache_manager.set_cached(raw_options_data, '_get_raw_options_data', survey_id, len(questions))
         
     return raw_options_data
 
-def _process_options_data(raw_options_data: Dict[str, Union[str, Dict[str, Any]]]) -> pd.DataFrame:
+def _process_options_data(raw_options_data: Dict[str, Union[str, Dict[str, Any]]], verbose: bool = False) -> pd.DataFrame:
     """
     Process raw options data into a clean DataFrame.
     
     Args:
         raw_options_data: Dictionary of raw options data from API
+        verbose: Whether to show error messages
         
     Returns:
         DataFrame with processed options data
@@ -120,12 +163,9 @@ def _process_options_data(raw_options_data: Dict[str, Union[str, Dict[str, Any]]
     if not raw_options_data:
         raise ValueError("raw_options_data cannot be empty")
     
-    # start a list 
     option_order = []
     
-    # go throught each qid
     for qid in raw_options_data.keys():
-        # the questions that don't have answer options are not relevant here 
         if raw_options_data[qid] == "No available answer options":
             pass 
         else:
@@ -134,35 +174,20 @@ def _process_options_data(raw_options_data: Dict[str, Union[str, Dict[str, Any]]
                 if _order_data.empty:
                     continue
                     
-                # transpose so that we can join with others 
                 _order_data = _order_data.T.reset_index()
-
-                # fix the column name 
                 _order_data = _order_data.rename(columns={'index': 'option_code'})
-
-                # fix the column name to make it clearer it's the option order 
-                # and the not the question order 
                 _order_data = _order_data.rename(columns={'order': 'option_order'})
-
-                # keep the question id in for when we append all together  
                 _order_data['qid'] = qid
-                
-                # append it to the list 
                 option_order.append(_order_data)
 
             except Exception as e: 
-                # this should help us spot issues
-                print(f"Failed processing options for question {qid}: {e}")
+                if verbose:
+                    print(f"Failed processing options for question {qid}: {e}")
                 
-    # Check if we have any valid options to concatenate
     if not option_order:
-        # Return empty DataFrame with expected structure
         return pd.DataFrame(columns=['option_code', 'option_order', 'qid', 'answer'])
         
-    # now concatenate all this info, and return it 
     options = pd.concat(option_order, ignore_index=True) 
-    
-    # keep the ids strings, dataframe might infer as int 
     options['qid'] = options['qid'].astype(str)
     
     return options
@@ -253,7 +278,21 @@ def _split_last_square_bracket_content(s):
 def _get_option_codes_to_names_mapper(options, question_id):
     
     # get the subset of option_info codes we need from options 
-    relevant_option_codes_info = options.set_index('qid').loc[question_id]
+    # CRITICAL FIX: Ensure question_id is string to match options DataFrame qid column type
+    question_id_str = str(question_id)
+    
+    # Check if the question has any options - if not, return empty dict (original behavior)
+    options_by_qid = options.set_index('qid')
+    if question_id_str not in options_by_qid.index:
+        # Return empty dict - let calling code handle this gracefully as it did before
+        return {}
+    
+    relevant_option_codes_info = options_by_qid.loc[question_id_str]
+    
+    # If it's a single row, convert to DataFrame
+    if not hasattr(relevant_option_codes_info, 'set_index'):
+        # Single row case - create a simple mapping
+        return {relevant_option_codes_info['option_code']: relevant_option_codes_info['answer']}
 
     # turn the option_codes and answer columns into a dict for mapping 
     options_codes_to_names_mapper = relevant_option_codes_info.set_index(
@@ -424,16 +463,22 @@ class SurveyAnalysis:
     
     This class provides methods to load survey structure, process responses,
     and analyze different question types with proper error handling and caching.
+    
+    Args:
+        survey_id: The ID of the survey to analyze
+        verbose: Whether to show progress bars and status messages
     """
     
-    def __init__(self, survey_id: str) -> None:
+    def __init__(self, survey_id: str, verbose: bool = False) -> None:
         """
         Initialize SurveyAnalysis instance.
         
         Args:
             survey_id: The ID of the survey to analyze
+            verbose: Whether to show progress bars and status messages
         """
         self.survey_id: str = survey_id
+        self.verbose: bool = verbose
         self.api: Optional['LimeSurveyClient'] = None
         self.responses_user_input: Optional[pd.DataFrame] = None 
         self.responses_metadata: Optional[pd.DataFrame] = None 
@@ -463,27 +508,32 @@ class SurveyAnalysis:
         # Error tracking
         self.fail_message_log: Dict[str, Exception] = {}
         
-    def setup(self, keep_incomplete_user_input: bool = False) -> None:
+    def setup(self, keep_incomplete_user_input: bool = False, api: Optional['LimeSurveyClient'] = None, config_path: Optional[str] = None) -> None:
         """
         Set up the analysis by loading data and processing structure.
         
         Args:
             keep_incomplete_user_input: Whether to keep incomplete responses
+            api: Optional pre-configured LimeSurveyClient instance
+            config_path: Optional path to credentials file (used only if api is None)
         """
-        self.api = self._connect_to_api()
+        self.api = api if api is not None else self._connect_to_api(config_path)
         self._load_response_data(keep_incomplete_user_input=keep_incomplete_user_input)
         self._get_survey_structure_data()
         self._process_column_codes()
         
-    def _connect_to_api(self) -> 'LimeSurveyClient':
+    def _connect_to_api(self, config_path: Optional[str] = None) -> 'LimeSurveyClient':
         """
         Connect to the LimeSurvey API.
+        
+        Args:
+            config_path: Optional path to credentials file
         
         Returns:
             Configured LimeSurvey API client
         """
         from .client import LimeSurveyClient
-        return LimeSurveyClient.from_config()
+        return LimeSurveyClient.from_config(config_path) if config_path else LimeSurveyClient.from_config()
         
     def _load_response_data(self, keep_incomplete_user_input: bool) -> None:
         """
@@ -500,17 +550,12 @@ class SurveyAnalysis:
         
     def _get_survey_structure_data(self):
         """
-        Retrieves the complete structure and metadata of a survey.
-
-        Parameters:
-            api: The survey API client instance
-            survey_id: The ID of the survey to analyze
-
-        Returns:
-            tuple: (questions, options, groups, properties, summary)
-                - questions: DataFrame containing survey questions
-                - options: DataFrame containing question options and their metadata
-                - groups: [TODO: Please specify what this contains]
+        Get survey structure data (questions, options, groups, properties, summary).
+        
+        This method populates the following instance attributes:
+            - questions: DataFrame of questions from the survey
+            - options: DataFrame of question options/choices
+            - groups: [TODO: Please specify what this contains]
                 - properties: Dictionary of survey properties from the API
                 - summary: [TODO: Please specify what this contains]
 
@@ -518,7 +563,8 @@ class SurveyAnalysis:
             This function makes multiple API calls and can be slow, particularly 
             when fetching options data for surveys with many questions.
         """
-        # Cached: permanent survey structure data
+        # Get cache manager with verbose setting
+        cache_manager = get_cache_manager(self.verbose)
         
         # Try to get cached structure data first
         cached_result = cache_manager.get_cached('_get_survey_structure_data', self.survey_id)
@@ -526,7 +572,8 @@ class SurveyAnalysis:
             self.questions, self.options, self.groups, self.properties, self.summary = cached_result
             return
         
-        print("🌐 Loading survey structure (not cached)...")
+        if self.verbose:
+            print("🌐 Loading survey structure (not cached)...")
         
         # Get survey details and response count
         properties = self.api.surveys.get_survey_properties(self.survey_id)
@@ -536,11 +583,11 @@ class SurveyAnalysis:
         groups = self.api.questions.list_groups(self.survey_id)
 
         # getting questions data 
-        questions = _get_questions(self.api, self.survey_id)
+        questions = _get_questions(self.api, self.survey_id, self.verbose)
 
         # getting question options data 
-        raw_options_data = _get_raw_options_data(self.api, self.survey_id, questions)  # this is slow, lots of api calls 
-        options = _process_options_data(raw_options_data)
+        raw_options_data = _get_raw_options_data(self.api, self.survey_id, questions, verbose=self.verbose)
+        options = _process_options_data(raw_options_data, verbose=self.verbose)
         options = _enrich_options_data_with_question_codes(options, questions)
         
         # Store in cache
@@ -552,7 +599,6 @@ class SurveyAnalysis:
         self.groups = groups  
         self.properties = properties
         self.summary = summary
-
 
     def _process_column_codes(self) -> None:
         """
@@ -583,24 +629,39 @@ class SurveyAnalysis:
         self.response_codes_to_question_codes = response_column_codes['question_code'].to_dict()
 
     def _get_max_answers(self, question_id):
-        # Cached: permanent question properties 
+        """Get maximum number of answers allowed for a question."""
+        # Get cache manager with verbose setting
+        cache_manager = get_cache_manager(self.verbose)
+        
+        # Try cache first
         cached_result = cache_manager.get_cached('_get_max_answers', self.survey_id, question_id)
         if cached_result is not None:
-            return cached_result
+            try:
+                return int(cached_result)
+            except (ValueError, TypeError):
+                # If cached value is invalid, fall through to fetch fresh data
+                pass
         
+        if self.verbose:
+            print("🌐 API CALL: _get_max_answers (not cached)")
         props = self.api.questions.get_question_properties(self.survey_id, question_id)
         attributes = props['attributes']
-        
         max_answers = attributes['max_answers']
-
-        if len(max_answers) > 0:
-            max_answers = int(attributes['max_answers'])
-        else: 
-            # bit of an awkwad hack but can solve later 
-            max_answers = 99
+        
+        # make sure it is an int, handle empty/invalid values 
+        if not max_answers or max_answers == '' or max_answers is None:
+            # Default to a very large number if not specified (essentially unlimited)
+            max_answers = 1000000
+        else:
+            try:
+                max_answers = int(max_answers)
+            except (ValueError, TypeError):
+                # If conversion fails, use default (essentially unlimited)
+                max_answers = 1000000
         
         # Store in cache
         cache_manager.set_cached(max_answers, '_get_max_answers', self.survey_id, question_id)
+        
         return max_answers
 
 
@@ -649,11 +710,20 @@ class SurveyAnalysis:
         # now we will fix the follwing issues in the columns:
         # - presence of np.nan or None 
         # - absence of options which have not received any answers  
-        relevant_options_for_question = self.options.set_index('question_code').loc[question_code]
-        # adds responses that may not have been chosen by anyone 
-        valid_options = relevant_options_for_question['option_code'].unique()
-        # removes rank responses that are not acceptable opiton codes (np.nan, None)
-        rank_responses = rank_responses.loc[:, valid_options]
+        try:
+            relevant_options_for_question = self.options.set_index('question_code').loc[question_code]
+            # adds responses that may not have been chosen by anyone 
+            valid_options = relevant_options_for_question['option_code'].unique()
+            # removes rank responses that are not acceptable opiton codes (np.nan, None)
+            rank_responses = rank_responses.loc[:, valid_options]
+        except (KeyError, IndexError, ValueError) as e:
+            # If question_code not found in options or any pandas indexing error, use existing columns
+            # This happens when a ranking question has no predefined options
+            if self.verbose:
+                print(f"⚠️ No options found for ranking question {question_code}, using response columns")
+            # Clean up columns by removing NaN/None values if they exist
+            clean_columns = [col for col in rank_responses.columns if pd.notna(col) and col != '' and col != 'None']
+            rank_responses = rank_responses.loc[:, clean_columns]
 
         return rank_responses
     
@@ -670,6 +740,7 @@ class SurveyAnalysis:
         rank_responses = self._process_rank_question_options(question_code)
 
         # Map the names to the rank responses options 
+        # Revert to original behavior - handle gracefully if no options mapping available
         rank_responses_named = _map_names_to_rank_responses(rank_responses, self.options, question_id)
 
         # if the question has a maximum number of answers, cut the response dataframe at that number of answers
@@ -678,7 +749,7 @@ class SurveyAnalysis:
         # adding zeros to pad any empty answers (e.g. option A was ranked 1 zero times)
         rank_responses_named = rank_responses_named.fillna(0)
 
-        self.processed_responses[question_id] = rank_responses_named 
+        self.processed_responses[question_id] = rank_responses_named
     
 
     
@@ -713,10 +784,16 @@ class SurveyAnalysis:
     def _process_radio_question(self, question_id):
         question_code = self._get_question_code(question_id)
 
-        responses = self.responses_user_input[question_code].value_counts()
+        # Get responses and filter out empty/null values before counting
+        raw_responses = self.responses_user_input[question_code]
+        # Filter out empty strings, None, and NaN values
+        filtered_responses = raw_responses[raw_responses.notna() & (raw_responses != '')]
+        responses = filtered_responses.value_counts()
 
         # getting the mapping between option codes and text answers 
-        mapper = self.options.loc[self.options['qid'] == question_id].set_index(
+        # CRITICAL FIX: Ensure question_id is string to match options DataFrame qid column type
+        question_id_str = str(question_id)
+        mapper = self.options.loc[self.options['qid'] == question_id_str].set_index(
             'option_code')['answer'].to_dict()
         # fixing the code that lime survey uses 
         mapper['-oth-'] = 'Other'
@@ -867,7 +944,9 @@ class SurveyAnalysis:
         # loop over the sub-questions 
         for sub_question_qid in sub_question_qids: 
             # get the text title for the sub-question
-            title = self.questions.set_index('qid').loc[sub_question_qid, 'question']
+            # CRITICAL FIX: Ensure sub_question_qid is string to match questions DataFrame qid column type
+            sub_question_qid_str = str(sub_question_qid)
+            title = self.questions.set_index('qid').loc[sub_question_qid_str, 'question']
 
             responses[title] = self._process_sub_question_multiple_short_text(
                 sub_question_qid, parent_question_code)
@@ -882,7 +961,9 @@ class SurveyAnalysis:
 
     def _question_has_other(self, question_id):
         
-        has_other = self.questions.set_index('qid').loc[question_id, 'other']
+        # CRITICAL FIX: Ensure question_id is string to match questions DataFrame qid column type
+        question_id_str = str(question_id)
+        has_other = self.questions.set_index('qid').loc[question_id_str, 'other']
         
         if has_other == 'Y':
             return True 
@@ -897,7 +978,9 @@ class SurveyAnalysis:
         """
         The question code is called "title" in the questions dataset 
         """
-        return self.questions.set_index('qid').loc[question_id, 'title']
+        # CRITICAL FIX: Ensure question_id is string to match questions DataFrame qid column type
+        question_id_str = str(question_id)
+        return self.questions.set_index('qid').loc[question_id_str, 'title']
 
  
     def _process_array_subquestion(self, sub_question_qid, parent_question_code):
@@ -931,8 +1014,10 @@ class SurveyAnalysis:
         parent_question_code = self._get_question_code(question_id=parent_qid)
 
         # get the ids of the sub questions for the array question 
+        # CRITICAL FIX: Ensure parent_qid is string to match questions DataFrame parent_qid column type
+        parent_qid_str = str(parent_qid)
         array_sub_questions_qids = self.questions.set_index('parent_qid').loc[
-            parent_qid, 'qid'].values
+            parent_qid_str, 'qid'].values
 
         # loop over the sub_questions and get the answers 
         sub_question_responses = {}
@@ -953,7 +1038,9 @@ class SurveyAnalysis:
 
     def process_question(self, question_id): 
 
-        question = self.questions.set_index('qid').loc[question_id]
+        # CRITICAL FIX: Ensure question_id is string to match questions DataFrame qid column type
+        question_id_str = str(question_id)
+        question = self.questions.set_index('qid').loc[question_id_str]
         question_theme = question['question_theme_name']
 
 
@@ -965,19 +1052,20 @@ class SurveyAnalysis:
         
     
     def process_all_questions(self):
-        # remove the questions where the theme is "None", 
-        # which means they are in fact sub-questions and will be called by other questions
-        # the fillna(None) avoids some weird errors of comparing with None 
-        question_ids = self.questions.loc[self.questions[
-            'question_theme_name'].fillna('None') != 'None', 'qid']
-
-        failed_ids = {}
-
-        for question_id in question_ids:
+        """Process all questions in the survey."""
+        # Get questions that are not sub-questions
+        main_questions = self.questions[self.questions['parent_qid'].fillna('None') == '0']
+        
+        if self.verbose:
+            main_questions = tqdm(main_questions.itertuples(), desc="Processing questions", total=len(main_questions))
+        else:
+            main_questions = main_questions.itertuples()
+            
+        for question in main_questions:
             try:
-                self.process_question(question_id)
+                self.process_question(question.qid)
             except Exception as e:
-                failed_ids[question_id] = e
-                
-        self.fail_message_log = failed_ids
+                if self.verbose:
+                    print(f"Failed to process question {question.qid}: {e}")
+                self.fail_message_log[question.qid] = e
 
