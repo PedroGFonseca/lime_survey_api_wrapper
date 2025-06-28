@@ -1073,3 +1073,58 @@ class SurveyAnalysis:
                     print(f"Failed to process question {question.qid}: {e}")
                 self.fail_message_log[question.qid] = e
 
+    @classmethod
+    def analyze_comprehensive(cls, survey_id: str, config_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Perform a comprehensive analysis of a survey.
+        
+        This is a convenience class method that combines multiple analysis steps
+        into a single call with complete results.
+        
+        Args:
+            survey_id: The ID of the survey to analyze
+            config_path: Optional path to credentials file
+            
+        Returns:
+            Dictionary containing:
+                - survey_info: Survey properties from API
+                - summary: Survey summary statistics  
+                - processed_responses: All processed question responses
+                - questions: DataFrame of questions
+                - options: DataFrame of question options
+                - groups: List of question groups
+                - failure_log: Any questions that failed to process
+                
+        Returns None if analysis fails.
+        """
+        try:
+            from .client import LimeSurveyClient
+            
+            # Initialize API client
+            api = LimeSurveyClient.from_config(config_path) if config_path else LimeSurveyClient.from_config()
+            
+            # Create analysis instance
+            analysis = cls(survey_id)
+            analysis.setup(api=api)
+            
+            # Process all questions
+            analysis.process_all_questions()
+            
+            # Get survey metadata
+            properties = api.surveys.get_survey_properties(survey_id)
+            summary = api.surveys.get_summary(survey_id)
+            
+            return {
+                'survey_info': properties,
+                'summary': summary,
+                'processed_responses': analysis.processed_responses,
+                'questions': analysis.questions,
+                'options': analysis.options,
+                'groups': analysis.groups,
+                'failure_log': analysis.fail_message_log
+            }
+            
+        except Exception as e:
+            print(f"Comprehensive analysis failed: {e}")
+            return None
+
