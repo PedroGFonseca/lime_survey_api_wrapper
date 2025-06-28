@@ -10,9 +10,9 @@ The following patterns are automatically ignored by git to protect sensitive dat
 
 ### **Survey ID Protection**
 ```bash
-# Specific survey (example: 291558)
-*survey_291558*
-*291558*
+# Specific survey (example: YOUR_SURVEY_ID)
+*survey_YOUR_SURVEY_ID*
+*YOUR_SURVEY_ID*
 
 # Any 6-digit survey ID patterns
 survey_[0-9]*/
@@ -68,8 +68,8 @@ Always include safety keywords in filenames when working with real data:
 
 ```python
 # ✅ SAFE - Will be ignored by git
-test_real_data_291558.py
-survey_291558_analysis_real.json
+test_real_data_YOUR_SURVEY_ID.py
+survey_YOUR_SURVEY_ID_analysis_real.json
 responses_real_data.csv
 my_analysis_live_data.ipynb
 
@@ -88,13 +88,13 @@ Create local directories that are automatically ignored:
 mkdir real_data/
 mkdir survey_cache/
 mkdir temp/
-mkdir survey_291558/
+mkdir survey_YOUR_SURVEY_ID/
 
 # Store your real data analysis here
 real_data/my_analysis.py
 survey_cache/cached_responses.json
 temp/test_results.csv
-survey_291558/analysis.ipynb
+survey_YOUR_SURVEY_ID/analysis.ipynb
 ```
 
 ### **3. Testing with Real Data**
@@ -104,12 +104,12 @@ When testing with real surveys:
 # ✅ SAFE - Use real data patterns
 def test_with_real_survey():
     """This file would be named: test_real_data_integration.py"""
-    analyzer = SurveyAnalysis("291558")  # Real survey ID
+    analyzer = SurveyAnalysis("YOUR_SURVEY_ID")  # Real survey ID
     analyzer.setup()
     # ... your analysis
     
     # Save results in safe location
-    results.to_csv("real_data/test_results_291558.csv")  # Gitignored
+    results.to_csv("real_data/test_results_YOUR_SURVEY_ID.csv")  # Gitignored
 ```
 
 ## **🔍 VERIFICATION COMMANDS**
@@ -129,11 +129,11 @@ git diff --cached --name-only
 ### **Find potentially sensitive files:**
 ```bash
 # Search for survey IDs in your files
-grep -r "291558" . --exclude-dir=.git
+grep -r "YOUR_SURVEY_ID" . --exclude-dir=.git
 
 # Find files with survey data patterns
 find . -name "*survey*" -type f
-find . -name "*291558*" -type f
+find . -name "*YOUR_SURVEY_ID*" -type f
 find . -name "*response*" -type f
 ```
 
@@ -143,12 +143,12 @@ find . -name "*response*" -type f
 ```python
 # File: tests/test_step1_real_survey_validation.py (GITIGNORED)
 """
-Local validation using real survey 291558.
+Local validation using real survey YOUR_SURVEY_ID.
 This file is automatically gitignored for safety.
 """
 
 def test_step1_with_real_data():
-    analyzer = SurveyAnalysis("291558")
+    analyzer = SurveyAnalysis("YOUR_SURVEY_ID")
     analyzer.setup(enable_enhanced_output=True)
     analyzer.process_all_questions()
     
@@ -169,14 +169,14 @@ def test_step1_with_real_data():
 ```python
 # File: real_data/my_survey_analysis.py (GITIGNORED)
 """
-Personal analysis of survey 291558.
+Personal analysis of survey YOUR_SURVEY_ID.
 This entire directory is gitignored.
 """
 
 from lime_survey_analyzer.analyser import SurveyAnalysis
 
 # Safe to use real survey ID here
-analyzer = SurveyAnalysis("291558")
+analyzer = SurveyAnalysis("YOUR_SURVEY_ID")
 analyzer.setup(enable_enhanced_output=True)
 analyzer.process_all_questions()
 
@@ -237,7 +237,7 @@ git status               # Verify sensitive files are unstaged
 
 # 3. Move sensitive files to safe location
 mkdir -p real_data/
-mv *291558* real_data/   # Move to gitignored directory
+mv *YOUR_SURVEY_ID* real_data/   # Move to gitignored directory
 mv *survey_data* real_data/
 mv *responses* real_data/
 
@@ -251,7 +251,7 @@ git commit -m "Safe commit - moved sensitive data to gitignored location"
 
 Before every commit:
 
-- [ ] Run `git status` and verify no files with survey IDs (291558, etc.)
+- [ ] Run `git status` and verify no files with survey IDs (YOUR_SURVEY_ID, etc.)
 - [ ] Run `git diff --cached --name-only` to see exactly what's being committed
 - [ ] Ensure no files contain real participant responses
 - [ ] Verify no API credentials or authentication files
@@ -266,10 +266,10 @@ Consider adding a pre-commit hook:
 # File: .git/hooks/pre-commit
 #!/bin/bash
 # Check for potentially sensitive patterns
-if git diff --cached --name-only | grep -E "(291558|survey_data|responses)" > /dev/null; then
+if git diff --cached --name-only | grep -E "(YOUR_SURVEY_ID|survey_data|responses)" > /dev/null; then
     echo "❌ BLOCKED: Potential sensitive data detected!"
     echo "Files containing survey data patterns:"
-    git diff --cached --name-only | grep -E "(291558|survey_data|responses)"
+    git diff --cached --name-only | grep -E "(YOUR_SURVEY_ID|survey_data|responses)"
     echo ""
     echo "Move these files to gitignored directories before committing."
     exit 1
