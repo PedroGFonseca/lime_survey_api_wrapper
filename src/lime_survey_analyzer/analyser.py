@@ -495,14 +495,13 @@ class SurveyAnalysis:
             'longfreetext': self._process_text_question,
             'listradio': self._process_radio_question,
             'numerical': self._process_text_question,
-            'equation': self._process_radio_question,
             'multipleshorttext': self._process_multiple_short_text,
             'ranking': self._process_ranking_question,
             'shortfreetext': self._process_text_question,
             'image_select-listradio': self._process_radio_question,
             'multiplechoice': self._process_multiple_choice_question,
             'arrays/increasesamedecrease': self._process_array_question,
-            'image_select-multiplechoice': self._process_multiple_choice_question
+            # Note: equation and image_select-multiplechoice not implemented yet
         }
         
         # Error tracking
@@ -980,7 +979,12 @@ class SurveyAnalysis:
         """
         # CRITICAL FIX: Ensure question_id is string to match questions DataFrame qid column type
         question_id_str = str(question_id)
-        return self.questions.set_index('qid').loc[question_id_str, 'title']
+        try:
+            return self.questions.set_index('qid').loc[question_id_str, 'title']
+        except KeyError:
+            raise ValueError(f"Question ID {question_id_str} not found in questions dataset")
+        except Exception as e:
+            raise ValueError(f"Error retrieving question code for question {question_id_str}: {e}")
 
  
     def _process_array_subquestion(self, sub_question_qid, parent_question_code):
@@ -1048,7 +1052,7 @@ class SurveyAnalysis:
         if handler:
             return handler(question_id)
         else:
-            raise ValueError(f"Unsupported question type: {question_theme}")
+            raise NotImplementedError(f"Question type '{question_theme}' not yet implemented (question ID: {question_id_str})")
         
     
     def process_all_questions(self):

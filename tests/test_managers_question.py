@@ -9,7 +9,7 @@ Focuses on realistic data flows and error conditions.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from src.lime_survey_analyzer.managers.question import QuestionManager
-from src.lime_survey_analyzer.exceptions import QuestionValidationError, QuestionNotFoundError
+from src.lime_survey_analyzer.exceptions import LimeSurveyError
 from src.lime_survey_analyzer.models import Question, QuestionType
 
 

@@ -11,7 +11,7 @@ import requests
 
 # Import logging and exceptions
 from .utils.logging import get_logger
-from .exceptions import AuthenticationError, APIError, SessionError
+from .exceptions import AuthenticationError, APIError
 
 
 class SessionManager:
@@ -64,8 +64,7 @@ class SessionManager:
             
         Raises:
             AuthenticationError: If authentication fails
-            APIError: If the request fails
-            SessionError: If session creation fails
+            APIError: If the request fails or session creation fails
         """
         self._request_id += 1
         
@@ -86,18 +85,18 @@ class SessionManager:
             )
             response.raise_for_status()
         except requests.exceptions.Timeout:
-            raise SessionError("Session creation request timed out")
+            raise APIError("Session creation request timed out")
         except requests.exceptions.ConnectionError:
-            raise SessionError(f"Connection failed to {self.url}")
+            raise APIError(f"Connection failed to {self.url}")
         except requests.exceptions.HTTPError as e:
-            raise SessionError(f"HTTP error during session creation: {e}")
+            raise APIError(f"HTTP error during session creation: {e}")
         except requests.exceptions.RequestException as e:
-            raise SessionError(f"Request failed during session creation: {e}")
+            raise APIError(f"Request failed during session creation: {e}")
         
         try:
             result = response.json()
         except ValueError as e:
-            raise SessionError(f"Invalid JSON response during session creation: {e}")
+            raise APIError(f"Invalid JSON response during session creation: {e}")
         
         if 'error' in result and result['error'] is not None:
             raise AuthenticationError(f"Session creation failed: {result['error']}")
@@ -195,14 +194,14 @@ class SessionManager:
             Parameter list with session key injected
             
         Raises:
-            SessionError: If no active session is available
+            APIError: If no active session is available
         """
         final_params = params.copy()
         
         # Replace None session key placeholder with actual session key
         if len(final_params) > 0 and final_params[0] is None:
             if not self._session_key:
-                raise SessionError("No active session key available")
+                raise APIError("No active session key available")
             final_params[0] = self._session_key
             
         return final_params 

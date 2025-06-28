@@ -40,9 +40,9 @@ def create_chart_from_data(data: Dict[str, Any], config: Dict[str, Any] = None, 
     elif chart_type == 'ranking_stacked':
         return create_ranking_stacked_bar_chart(chart_data, title, config)
     elif chart_type == 'text_responses':
-        return create_text_responses_chart(chart_data, title, config)
+        return create_text_responses_chart(chart_data, title, config, verbose)
     elif chart_type == 'multiple_short_text':
-        return create_multiple_short_text_chart(chart_data, title, config)
+        return create_multiple_short_text_chart(chart_data, title, config, verbose)
     else:
         raise ValueError(f"Unsupported chart type: {chart_type}")
 
@@ -92,7 +92,7 @@ def create_chart_for_question(question_id: int, question_info, analysis, config:
                 print(f"📝 Creating text responses display for text question {question_id}: {question_title[:50]}...")
             
             data, title = extract_text_data(analysis, question_id)
-            fig = create_text_responses_chart(data, title, config)
+            fig = create_text_responses_chart(data, title, config, verbose)
             saved_path = save_chart(fig, f"{title}_text", output_settings['plots_dir'], output_settings['default_format'], verbose)
             
             return saved_path is not None

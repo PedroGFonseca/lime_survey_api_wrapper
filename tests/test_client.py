@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from lime_survey_analyzer import LimeSurveyClient
 from lime_survey_analyzer.managers.base import requires_session
-from lime_survey_analyzer.exceptions import ConfigurationError
+from lime_survey_analyzer.exceptions import LimeSurveyError
 
 
 class TestLimeSurveyClient:
@@ -103,7 +103,7 @@ class TestLimeSurveyDirectAPI:
 
     def test_init_invalid_url(self):
         """Test initialization with invalid URL."""
-        with pytest.raises(ConfigurationError, match="URL must start with http"):
+        with pytest.raises(LimeSurveyError, match="URL must start with http"):
             LimeSurveyClient("invalid-url", "user", "pass")
 
     def test_init_http_warning(self):
@@ -137,7 +137,7 @@ password = testpass
 
     def test_from_config_missing_file(self):
         """Test error when config file doesn't exist."""
-        with pytest.raises(ConfigurationError):
+        with pytest.raises(LimeSurveyError):
             LimeSurveyClient.from_config("nonexistent.ini")
 
     def test_from_config_missing_section(self, tmp_path):
@@ -145,7 +145,7 @@ password = testpass
         config_file = tmp_path / "test_config.ini"
         config_file.write_text("[other_section]\nkey = value\n")
         
-        with pytest.raises(ConfigurationError, match="must contain \\[limesurvey\\] section"):
+        with pytest.raises(LimeSurveyError, match="must contain \\[limesurvey\\] section"):
             LimeSurveyClient.from_config(config_file)
 
     def test_from_config_missing_keys(self, tmp_path):
@@ -158,7 +158,7 @@ username = testuser
 # password missing
 """)
         
-        with pytest.raises(ConfigurationError, match="Missing required configuration keys"):
+        with pytest.raises(LimeSurveyError, match="Missing required configuration keys"):
             LimeSurveyClient.from_config(config_file)
 
     @patch('requests.post')

@@ -60,7 +60,7 @@ from .managers.participant import ParticipantManager
 from .utils.logging import get_logger, configure_package_logging
 
 # Import exceptions
-from .exceptions import ConfigurationError, AuthenticationError, APIError, handle_api_error
+from .exceptions import LimeSurveyError, AuthenticationError, APIError, handle_api_error
 
 
 class LimeSurveyClient:
@@ -109,7 +109,7 @@ class LimeSurveyClient:
         
         # Validate URL
         if not url.startswith(('http://', 'https://')):
-            raise ConfigurationError("URL must start with http:// or https://")
+            raise LimeSurveyError("URL must start with http:// or https://")
         
         # Security warning for non-HTTPS URLs
         if url.startswith('http://') and not url.startswith('http://localhost'):
@@ -164,7 +164,7 @@ class LimeSurveyClient:
             Configured LimeSurveyClient instance
             
         Raises:
-            ConfigurationError: If config file doesn't exist or is invalid
+            LimeSurveyError: If config file doesn't exist or is invalid
             
         Example:
             # Using default path
@@ -178,7 +178,7 @@ class LimeSurveyClient:
         """
         config_file = Path(config_path)
         if not config_file.exists():
-            raise ConfigurationError(
+            raise LimeSurveyError(
                 f"Configuration file not found: {config_path}\n"
                 f"Please create a configuration file with the following format:\n"
                 f"[limesurvey]\n"
@@ -191,10 +191,10 @@ class LimeSurveyClient:
         try:
             config.read(config_file)
         except Exception as e:
-            raise ConfigurationError(f"Failed to read configuration file: {e}")
+            raise LimeSurveyError(f"Failed to read configuration file: {e}")
         
         if 'limesurvey' not in config:
-            raise ConfigurationError(
+            raise LimeSurveyError(
                 f"Configuration file must contain [limesurvey] section. "
                 f"Found sections: {list(config.sections())}"
             )
@@ -204,7 +204,7 @@ class LimeSurveyClient:
         missing_keys = [key for key in required_keys if key not in section]
         
         if missing_keys:
-            raise ConfigurationError(
+            raise LimeSurveyError(
                 f"Missing required configuration keys: {', '.join(missing_keys)}\n"
                 f"Required keys: {', '.join(required_keys)}"
             )

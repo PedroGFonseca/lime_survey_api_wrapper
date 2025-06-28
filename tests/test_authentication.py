@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch, mock_open
 
 from lime_survey_analyzer import LimeSurveyClient
-from lime_survey_analyzer.exceptions import ConfigurationError
+from lime_survey_analyzer.exceptions import LimeSurveyError
 
 
 class TestAuthentication:
@@ -46,7 +46,7 @@ password = testpass
     def test_from_config_missing_file(self):
         """Test authentication failure when config file is missing."""
         with patch("pathlib.Path.exists", return_value=False):
-            with pytest.raises(ConfigurationError, match="Configuration file not found"):
+            with pytest.raises(LimeSurveyError, match="Configuration file not found"):
                 LimeSurveyClient.from_config('nonexistent.ini')
     
     def test_from_config_missing_section(self):
@@ -56,7 +56,7 @@ url = https://test.com
 """
         with patch("pathlib.Path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=config_content)):
-                with pytest.raises(ConfigurationError, match="must contain \\[limesurvey\\] section"):
+                with pytest.raises(LimeSurveyError, match="must contain \\[limesurvey\\] section"):
                     LimeSurveyClient.from_config('test.ini')
     
     def test_from_config_missing_keys(self):
@@ -68,7 +68,7 @@ username = testuser
 """
         with patch("pathlib.Path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=config_content)):
-                with pytest.raises(ConfigurationError, match="Missing required configuration keys"):
+                with pytest.raises(LimeSurveyError, match="Missing required configuration keys"):
                     LimeSurveyClient.from_config('test.ini')
     
     def test_from_config_invalid_file(self):
@@ -78,7 +78,7 @@ not a valid ini format
 """
         with patch("pathlib.Path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=config_content)):
-                with pytest.raises(ConfigurationError, match="Failed to read configuration file"):
+                with pytest.raises(LimeSurveyError, match="Failed to read configuration file"):
                     LimeSurveyClient.from_config('test.ini')
     
     def test_from_config_with_debug(self):
@@ -118,7 +118,7 @@ password = testpass
     
     def test_url_validation(self):
         """Test URL validation during initialization."""
-        with pytest.raises(ConfigurationError, match="URL must start with http"):
+        with pytest.raises(LimeSurveyError, match="URL must start with http"):
             LimeSurveyClient(
                 url='invalid-url',
                 username='testuser',

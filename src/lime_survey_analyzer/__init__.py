@@ -106,9 +106,7 @@ from .exceptions import (
     LimeSurveyError,
     
     # Specific exceptions
-    AuthenticationError, ConfigurationError, APIError, SessionError,
-    QuestionValidationError, UnsupportedQuestionTypeError, DataValidationError,
-    SurveyNotFoundError, QuestionNotFoundError, ResponseExportError, VisualizationError,
+    AuthenticationError, APIError, SurveyNotFoundError,
     
     # Utility function
     handle_api_error,
@@ -126,9 +124,6 @@ from .types import (
     ResponseMetadata,
     GroupData
 )
-
-# Import analysis functions
-from . import analysis
 
 # Import types for type checking
 from . import types
@@ -207,16 +202,8 @@ __all__ = [
     # Exceptions
     "LimeSurveyError",
     "AuthenticationError",
-    "ConfigurationError", 
     "APIError",
-    "SessionError",
-    "QuestionValidationError",
-    "UnsupportedQuestionTypeError",
-    "DataValidationError",
     "SurveyNotFoundError",
-    "QuestionNotFoundError", 
-    "ResponseExportError",
-    "VisualizationError",
     
     # Analysis functionality
     "SurveyAnalysis",

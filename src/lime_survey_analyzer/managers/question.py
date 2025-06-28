@@ -23,7 +23,7 @@ from ..models.question_answer_codes import (
 
 # Import logging and exceptions
 from ..utils.logging import get_logger
-from ..exceptions import QuestionValidationError, QuestionNotFoundError, UnsupportedQuestionTypeError
+from ..exceptions import LimeSurveyError
 
 
 class QuestionManager(BaseManager):
