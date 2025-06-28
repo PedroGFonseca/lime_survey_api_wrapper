@@ -128,7 +128,7 @@ class Question:
             Human-readable text (e.g., 'Increase', 'Same', 'Decrease')
             
         Example:
-            question = api.questions.get_question_structured('291558', '28')
+            question = api.questions.get_question_structured('YOUR_SURVEY_ID', '28')
             text = question.get_answer_text_for_code('I')  # Returns 'Increase'
         """
         answer = self.get_answer_by_code(code)
@@ -152,7 +152,7 @@ class Question:
             Dictionary mapping codes to text (e.g., {'I': 'Increase', 'S': 'Same', 'D': 'Decrease'})
             
         Example:
-            question = api.questions.get_question_structured('291558', '28')
+            question = api.questions.get_question_structured('YOUR_SURVEY_ID', '28')
             mapping = question.get_answer_codes_mapping()
             # Returns: {'I': 'Increase', 'S': 'Same', 'D': 'Decrease'}
         """
@@ -179,7 +179,7 @@ class Question:
             Dictionary mapping sub-question codes to text
             
         Example:
-            question = api.questions.get_question_structured('291558', '28')
+            question = api.questions.get_question_structured('YOUR_SURVEY_ID', '28')
             sub_mapping = question.get_sub_questions_mapping()
             # Returns: {'29': 'Age of candidate', '30': 'Gender of candidate', ...}
         """
@@ -194,7 +194,7 @@ class Question:
             Dictionary with answer_options, sub_questions, and response format info
             
         Example:
-            question = api.questions.get_question_structured('291558', '28')
+            question = api.questions.get_question_structured('YOUR_SURVEY_ID', '28')
             mapping = question.get_complete_response_mapping()
             # Returns: {
             #   'answer_options': {'I': 'Increase', 'S': 'Same', 'D': 'Decrease'},

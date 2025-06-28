@@ -3,7 +3,7 @@
 Data Generators for LimeSurvey Testing
 
 Creates realistic synthetic data that matches patterns observed in real surveys.
-Based on survey 291558 analysis (38 questions, 359 responses, mix of question types).
+Based on real survey analysis (38 questions, 359 responses, mix of question types).
 """
 
 import pandas as pd
@@ -41,7 +41,7 @@ class MockOptionData:
 class SurveyDataGenerator:
     """Generate realistic LimeSurvey data for testing current handlers"""
     
-    def __init__(self, survey_id: str = "291558", num_responses: int = 359):
+    def __init__(self, survey_id: str = "111111", num_responses: int = 359):
         self.survey_id = survey_id
         self.num_responses = num_responses
         self.response_ids = [f"R{i+1}" for i in range(num_responses)]
@@ -393,8 +393,8 @@ class SurveyDataGenerator:
 
 
 # Convenience functions for testing
-def create_test_survey_data(survey_id: str = "TEST_291558", num_responses: int = 359):
-    """Create test data matching survey 291558 patterns"""
+def create_test_survey_data(survey_id: str = "111111", num_responses: int = 359):
+    """Create test data matching real survey patterns"""
     generator = SurveyDataGenerator(survey_id, num_responses)
     return generator.generate_full_survey_data()
 

@@ -31,12 +31,12 @@ class TestStep1Integration:
     @pytest.fixture
     def survey_analyzer(self):
         """Create a SurveyAnalysis instance for testing"""
-        return SurveyAnalysis("291558")
+        return SurveyAnalysis("111111")
     
     @pytest.fixture
     def mock_analyzer_with_data(self):
         """Create a mock analyzer with sample processed responses"""
-        analyzer = SurveyAnalysis("291558")
+        analyzer = SurveyAnalysis("111111")
         
         # Mock the data loading and setup
         analyzer.questions = pd.DataFrame({
