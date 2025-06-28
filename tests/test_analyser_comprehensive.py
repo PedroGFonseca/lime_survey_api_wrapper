@@ -269,12 +269,13 @@ class TestStandaloneFunctions:
 
     def test_get_response_rate(self):
         """Test _get_response_rate"""
-        absolute_counts = pd.Series([10, 20, 30], index=['A', 'B', 'C'])
+        # FIX: Create proper test data - absolute_counts should match numeric_subset sums
         numeric_subset = pd.DataFrame({
-            'A': [1, 0, 1, 1, 0],
-            'B': [1, 1, 0, 1, 1],
-            'C': [0, 1, 1, 1, 1]
+            'A': [1, 0, 1, 1, 0],  # sum = 3
+            'B': [1, 1, 0, 1, 1],  # sum = 4  
+            'C': [0, 1, 1, 1, 1]   # sum = 4
         })
+        absolute_counts = numeric_subset.sum()  # [3, 4, 4]
         
         result = _get_response_rate(absolute_counts, numeric_subset)
         
@@ -282,6 +283,11 @@ class TestStandaloneFunctions:
         assert len(result) == 3
         # Check that rates are between 0 and 1
         assert all(0 <= rate <= 1 for rate in result)
+        # Verify calculation: rate = count / total_respondents
+        # Total respondents = those who responded to any option
+        total_respondents = (numeric_subset.sum(axis=1) > 0).sum()  # Should be 5 (all rows have at least one 1)
+        expected_rates = absolute_counts / total_respondents
+        pd.testing.assert_series_equal(result, expected_rates)
 
     def test_get_response_data(self):
         """Test get_response_data function"""
@@ -375,17 +381,19 @@ class TestSurveyAnalysisClass:
 
     def test_get_response_codes_for_question(self, survey_analysis):
         """Test _get_response_codes_for_question method"""
-        survey_analysis.responses_user_input = pd.DataFrame({
-            'Q1': [1, 2],
-            'Q1[A1]': [1, 0],
-            'Q1[A2]': [0, 1],
-            'Q2': [1, 1]
-        })
+        survey_analysis.response_column_codes = pd.DataFrame({
+            'question_code': ['Q1', 'Q1', 'Q2'],
+            'appendage': ['A1', 'A2', 'A1']
+        }, index=['Q1[A1]', 'Q1[A2]', 'Q2[A1]'])
         
         result = survey_analysis._get_response_codes_for_question('Q1')
         
-        expected_codes = ['Q1[A1]', 'Q1[A2]']
-        assert all(code in result for code in expected_codes)
+        # FIX: Method returns DataFrame, not list
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert 'Q1[A1]' in result.index
+        assert 'Q1[A2]' in result.index
+        assert all(result['question_code'] == 'Q1')
 
     def test_get_absolute_count_and_response_rate(self, survey_analysis):
         """Test _get_absolute_count_and_response_rate method"""
@@ -395,15 +403,20 @@ class TestSurveyAnalysisClass:
         })
         
         with patch.object(survey_analysis, '_get_response_codes_for_question') as mock_get_codes:
-            mock_get_codes.return_value = ['Q1[A1]', 'Q1[A2]']
+            # FIX: Mock should return DataFrame with .index attribute, not list
+            mock_codes_df = pd.DataFrame({'question_code': ['Q1', 'Q1']}, 
+                                       index=['Q1[A1]', 'Q1[A2]'])
+            mock_get_codes.return_value = mock_codes_df
             
-            absolute_counts, response_rates = survey_analysis._get_absolute_count_and_response_rate('Q1')
+            # FIX: Method returns DataFrame, not tuple
+            result = survey_analysis._get_absolute_count_and_response_rate('Q1')
             
-            assert isinstance(absolute_counts, pd.Series)
-            assert isinstance(response_rates, pd.Series)
+            assert isinstance(result, pd.DataFrame)
+            assert 'absolute_counts' in result.columns
+            assert 'response_rates' in result.columns
             # Y responses should be counted as 1, empty as 0
-            assert absolute_counts['Q1[A1]'] == 2
-            assert absolute_counts['Q1[A2]'] == 2
+            assert result.loc['Q1[A1]', 'absolute_counts'] == 2
+            assert result.loc['Q1[A2]', 'absolute_counts'] == 2
 
     def test_process_column_codes(self, survey_analysis):
         """Test _process_column_codes method"""
