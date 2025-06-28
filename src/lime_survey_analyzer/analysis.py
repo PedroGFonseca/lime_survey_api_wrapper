@@ -11,10 +11,7 @@ from pathlib import Path
 import json
 
 from .client import LimeSurveyClient
-from .cache_manager import get_cache_manager, cached_api_call
-
-# Get the cache manager instance
-cache_manager = get_cache_manager()
+from .cache_manager import get_cache_manager
 
 # Forward reference for type hints
 if TYPE_CHECKING:
@@ -33,13 +30,14 @@ class ResponseData(TypedDict, total=False):
     refurl: Optional[str]
 
 
-def get_survey_structure_data(api: LimeSurveyClient, survey_id: str) -> Tuple[pd.DataFrame, pd.DataFrame, List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
+def get_survey_structure_data(api: LimeSurveyClient, survey_id: str, verbose: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame, List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
     """
     Retrieves the complete structure and metadata of a survey.
 
     Parameters:
         api: The survey API client instance
         survey_id: The ID of the survey to analyze
+        verbose: Whether to show cache messages
 
     Returns:
         tuple: (questions, options, groups, properties, summary)
@@ -52,10 +50,16 @@ def get_survey_structure_data(api: LimeSurveyClient, survey_id: str) -> Tuple[pd
     # Import here to avoid circular imports
     from .analyser import _get_questions, _get_raw_options_data, _process_options_data, _enrich_options_data_with_question_codes
     
+    # Get cache manager with verbose setting
+    cache_manager = get_cache_manager(verbose)
+    
     # Try to get cached structure data first
     cached_result = cache_manager.get_cached('get_survey_structure_data', survey_id)
     if cached_result is not None:
         return cached_result
+    
+    if verbose:
+        print("🌐 API CALL: get_survey_structure_data (not cached)")
     
     # Get survey details and response count
     properties = api.surveys.get_survey_properties(survey_id)
@@ -65,11 +69,11 @@ def get_survey_structure_data(api: LimeSurveyClient, survey_id: str) -> Tuple[pd
     groups = api.questions.list_groups(survey_id)
 
     # getting questions data 
-    questions = _get_questions(api, survey_id)
+    questions = _get_questions(api, survey_id, verbose)
 
     # getting question options data 
-    raw_options_data = _get_raw_options_data(api, survey_id, questions)  # this is slow, lots of api calls 
-    options = _process_options_data(raw_options_data)
+    raw_options_data = _get_raw_options_data(api, survey_id, questions, verbose)  # this is slow, lots of api calls 
+    options = _process_options_data(raw_options_data, verbose)
     options = _enrich_options_data_with_question_codes(options, questions)
     
     # Store in cache
@@ -138,10 +142,10 @@ def get_response_stats_multiple_choice(responses_user_input: pd.DataFrame,
 
     # Fix pandas future warning by being explicit about downcasting
     numeric_subset = responses_user_input[
-        question_response_codes.index].replace('Y', 1).replace('', 0).fillna(0)
+        question_response_codes.index].replace({'Y': 1, '': 0}).fillna(0)
     
     # Explicitly convert to int to avoid future warning
-    numeric_subset = numeric_subset.astype(int)
+    numeric_subset = numeric_subset.infer_objects(copy=False).astype(int)
 
     # how many respondents marked each option
     absolute_counts = numeric_subset.sum()

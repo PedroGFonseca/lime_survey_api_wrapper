@@ -202,19 +202,19 @@ class CacheManager(Protocol):
     """Protocol for cache management."""
     
     def get_cached(self, func_name: str, *args: Any, **kwargs: Any) -> Optional[Any]:
-        """Get cached data."""
+        """Get cached result."""
         ...
     
     def set_cached(self, data: Any, func_name: str, *args: Any, **kwargs: Any) -> None:
-        """Store data in cache."""
+        """Store result in cache."""
         ...
     
     def clear_cache(self, survey_id: Optional[str] = None) -> None:
-        """Clear cached data."""
+        """Clear cache."""
         ...
 
 
-# Data Processing Types
+# Data Structure Types
 class ColumnMapping(TypedDict):
     """Mapping for response column codes."""
     question_code: str
@@ -234,7 +234,7 @@ class RankingData(TypedDict):
     max_answers: int
 
 
-# Validation Types
+# Validation and Processing Types
 class ValidationResult(TypedDict):
     """Result of data validation."""
     is_valid: bool
@@ -252,7 +252,6 @@ class ProcessingResult(TypedDict, total=False):
     processing_time: float
 
 
-# Survey Analysis Types
 class SurveyAnalysisResult(TypedDict, total=False):
     """Complete survey analysis result."""
     survey_id: str
